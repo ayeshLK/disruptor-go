@@ -143,6 +143,12 @@ func TestCloseTerminatesBatchProcessors(t *testing.T) {
 					if processor.Running() {
 						t.Fatal("processor still reports running after close")
 					}
+					if err := processor.Run(context.Background()); !errors.Is(err, ErrClosed) {
+						t.Fatalf("restarted processor after close: got %v", err)
+					}
+					if processor.Running() {
+						t.Fatal("processor reports running after closed restart")
+					}
 				})
 			}
 		})

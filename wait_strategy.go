@@ -143,14 +143,14 @@ func BlockingWait() WaitStrategy {
 
 func (s *BlockingWaitStrategy) waitFor(ctx context.Context, desired int64, cursor sequenceReader, dependent sequenceReader, state waitState) (int64, error) {
 	for cursor.Load() < desired {
-		if err := checkWait(ctx, state); err != nil {
-			return 0, err
-		}
 		s.mu.Lock()
 		ch := s.ch
 		s.mu.Unlock()
 		if cursor.Load() >= desired {
 			break
+		}
+		if err := checkWait(ctx, state); err != nil {
+			return 0, err
 		}
 		select {
 		case <-ch:

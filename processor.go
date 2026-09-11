@@ -17,7 +17,6 @@ package disruptor
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
 )
 
@@ -42,6 +41,7 @@ func WithMaxBatchSize(size int64) ProcessorOption {
 
 const (
 	processorIdle int32 = iota
+	processorStarting
 	processorRunning
 	processorHalted
 )
@@ -74,19 +74,27 @@ func NewBatchProcessor[T any](ring *RingBuffer[T], barrier *SequenceBarrier, han
 // Sequence returns the processor's last fully acknowledged batch position.
 func (p *BatchProcessor[T]) Sequence() *Sequence { return p.sequence }
 
-// Running reports whether Run currently owns the processor lifecycle.
-func (p *BatchProcessor[T]) Running() bool { return p.state.Load() == processorRunning }
+// Running reports whether Run is ready to process events or is finishing after
+// Halt. It remains true after Halt until that Run call returns.
+func (p *BatchProcessor[T]) Running() bool {
+	state := p.state.Load()
+	return state == processorRunning || state == processorHalted
+}
 
 // Run processes events until Halt is called, the context is cancelled, the ring
 // is closed, or a handler returns an error. Ring closure returns ErrClosed. On
-// handler error the current batch is not acknowledged, so restarting the
-// processor replays that batch.
+// handler error or panic the current batch is not acknowledged, so restarting
+// the processor replays that batch. Handler failures are returned as
+// *HandlerError and recovered handler panics as *HandlerPanicError.
 func (p *BatchProcessor[T]) Run(ctx context.Context) error {
-	if !p.state.CompareAndSwap(processorIdle, processorRunning) {
+	if !p.state.CompareAndSwap(processorIdle, processorStarting) {
 		return ErrAlreadyRunning
 	}
-	p.barrier.ClearAlert()
 	defer p.state.Store(processorIdle)
+	p.barrier.ClearAlert()
+	if !p.state.CompareAndSwap(processorStarting, processorRunning) {
+		return nil
+	}
 
 	next := p.sequence.Load() + 1
 	for {
@@ -107,8 +115,8 @@ func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 			end = next + p.maxBatchSize - 1
 		}
 		for sequence := next; sequence <= end; sequence++ {
-			if err := p.handler(p.ring.Get(sequence), sequence, sequence == end); err != nil {
-				return fmt.Errorf("disruptor: handler failed at sequence %d: %w", sequence, err)
+			if err := p.handle(sequence, sequence == end); err != nil {
+				return err
 			}
 		}
 		p.sequence.Store(end)
@@ -116,8 +124,33 @@ func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 	}
 }
 
-// Halt alerts the barrier and causes the active Run call to return.
+func (p *BatchProcessor[T]) handle(sequence int64, endOfBatch bool) (err error) {
+	defer func() {
+		if value := recover(); value != nil {
+			err = &HandlerPanicError{Sequence: sequence, Value: value}
+		}
+	}()
+	if err := p.handler(p.ring.Get(sequence), sequence, endOfBatch); err != nil {
+		return &HandlerError{Sequence: sequence, Err: err}
+	}
+	return nil
+}
+
+// Halt alerts the barrier and causes the active Run call to return after its
+// current handler invocation and selected batch complete. Halt is a no-op when
+// the processor is idle.
 func (p *BatchProcessor[T]) Halt() {
-	p.state.Store(processorHalted)
-	p.barrier.Alert()
+	for {
+		switch state := p.state.Load(); state {
+		case processorIdle, processorHalted:
+			return
+		case processorStarting, processorRunning:
+			if p.state.CompareAndSwap(state, processorHalted) {
+				p.barrier.Alert()
+				return
+			}
+		default:
+			panic("disruptor: invalid processor state")
+		}
+	}
 }
