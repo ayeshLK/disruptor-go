@@ -17,6 +17,7 @@ package disruptor
 import (
 	"context"
 	"runtime"
+	"sync"
 	"sync/atomic"
 )
 
@@ -54,13 +55,20 @@ type sequencerBase struct {
 	wait       WaitStrategy
 	gating     atomic.Pointer[sequenceList]
 	closed     atomic.Bool
+	closedCh   chan struct{}
+	closeOnce  sync.Once
 }
 
 func newSequencerBase(size int64, wait WaitStrategy) *sequencerBase {
 	if wait == nil {
 		wait = BlockingWait()
 	}
-	b := &sequencerBase{bufferSize: size, cursor: NewSequence(InitialSequence), wait: wait}
+	b := &sequencerBase{
+		bufferSize: size,
+		cursor:     NewSequence(InitialSequence),
+		wait:       wait,
+		closedCh:   make(chan struct{}),
+	}
 	empty := sequenceList{}
 	b.gating.Store(&empty)
 	return b
@@ -121,12 +129,15 @@ func (b *sequencerBase) NewBarrier(dependencies ...*Sequence) *SequenceBarrier {
 	if len(dependencies) > 0 {
 		dependent = sequenceGroup(dependencies)
 	}
-	return &SequenceBarrier{sequencer: nil, wait: b.wait, cursor: b.cursor, dependent: dependent}
+	return &SequenceBarrier{sequencer: nil, wait: b.wait, cursor: b.cursor, dependent: dependent, closed: &b.closed, closedCh: b.closedCh}
 }
 
 func (b *sequencerBase) Close() {
-	b.closed.Store(true)
-	b.wait.signalAll()
+	b.closeOnce.Do(func() {
+		b.closed.Store(true)
+		close(b.closedCh)
+		b.wait.signalAll()
+	})
 }
 
 func (b *sequencerBase) waitForCapacity(ctx context.Context, wrapPoint, fallback int64) (int64, error) {

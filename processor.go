@@ -77,9 +77,10 @@ func (p *BatchProcessor[T]) Sequence() *Sequence { return p.sequence }
 // Running reports whether Run currently owns the processor lifecycle.
 func (p *BatchProcessor[T]) Running() bool { return p.state.Load() == processorRunning }
 
-// Run processes events until Halt is called, the context is cancelled, or a
-// handler returns an error. On handler error the current batch is not
-// acknowledged, so restarting the processor replays that batch.
+// Run processes events until Halt is called, the context is cancelled, the ring
+// is closed, or a handler returns an error. Ring closure returns ErrClosed. On
+// handler error the current batch is not acknowledged, so restarting the
+// processor replays that batch.
 func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 	if !p.state.CompareAndSwap(processorIdle, processorRunning) {
 		return ErrAlreadyRunning

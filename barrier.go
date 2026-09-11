@@ -27,15 +27,18 @@ type SequenceBarrier struct {
 	cursor    *Sequence
 	dependent sequenceReader
 	alerted   atomic.Bool
+	closed    *atomic.Bool
+	closedCh  <-chan struct{}
 }
 
-// WaitFor blocks until desired is available, the context is cancelled, or the
-// barrier is alerted. Multi-producer barriers never cross a publication gap.
+// WaitFor blocks until desired is available, the context is cancelled, the
+// barrier is alerted, or the ring is closed. Multi-producer barriers never
+// cross a publication gap.
 func (b *SequenceBarrier) WaitFor(ctx context.Context, desired int64) (int64, error) {
 	if b.alerted.Load() {
 		return 0, ErrAlerted
 	}
-	available, err := b.wait.waitFor(ctx, desired, b.cursor, b.dependent, &b.alerted)
+	available, err := b.wait.waitFor(ctx, desired, b.cursor, b.dependent, waitState{alerted: &b.alerted, closed: b.closed, closedCh: b.closedCh})
 	if err != nil || available < desired {
 		return available, err
 	}

@@ -136,6 +136,11 @@ Go scheduler.
 - Handler errors leave the current batch unacknowledged. Restarting that
   processor replays the batch, so restartable handlers should be idempotent.
 - Build and test applications with the race detector.
+- `Close` immediately rejects future claims and unblocks waits for unavailable
+  sequences with `ErrClosed`.
+- Events published before `Close` remain visible, but `Close` does not wait for
+  consumers to process them. Applications that require draining must first wait
+  for their terminal consumer sequences to reach the producer cursor.
 
 Go atomic publication and observation establish the visibility order. Go
 atomics are sequentially consistent.

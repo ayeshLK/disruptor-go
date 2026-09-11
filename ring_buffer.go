@@ -142,5 +142,7 @@ func (r *RingBuffer[T]) RemoveGatingSequence(sequence *Sequence) bool {
 	return r.sequencer.RemoveGatingSequence(sequence)
 }
 
-// Close unblocks waiters and prevents further claims.
+// Close immediately prevents further claims and unblocks waits for unavailable
+// sequences with ErrClosed. Published sequences remain visible; Close does not
+// wait for consumers to process them.
 func (r *RingBuffer[T]) Close() { r.sequencer.Close() }
