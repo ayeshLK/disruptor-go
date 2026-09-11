@@ -7,7 +7,7 @@ core LMAX Disruptor protocol. It is intentionally independent of the Java
 library: do not add Java interop, cgo, `unsafe`, or a channel-backed substitute
 for the ring protocol unless the project direction explicitly changes.
 
-The public package is `github.com/ayeshLK/disruptor-go` (`package disruptor`).
+The public package is `github.com/ayeshLK/lib-disruptor` (`package disruptor`).
 The current compatibility target is Go 1.25 or newer. Keep the module free of
 third-party dependencies unless a dependency is clearly justified and approved.
 

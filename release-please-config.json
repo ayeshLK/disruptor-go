@@ -7,7 +7,7 @@
   "release-type": "go",
   "packages": {
     ".": {
-      "package-name": "disruptor-go"
+      "package-name": "lib-disruptor"
     }
   }
 }

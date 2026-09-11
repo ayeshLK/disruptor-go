@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve `disruptor-go`.
+Thank you for helping improve `lib-disruptor`.
 
 ## Development setup
 

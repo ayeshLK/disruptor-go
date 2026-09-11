@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	disruptor "github.com/ayeshLK/disruptor-go"
+	disruptor "github.com/ayeshLK/lib-disruptor"
 )
 
 type loadEvent struct {

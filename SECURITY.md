@@ -4,7 +4,7 @@
 
 Do not disclose suspected vulnerabilities in a public issue. Use GitHub private
 vulnerability reporting or the Security Advisory interface for
-`ayeshLK/disruptor-go`. Include affected versions, reproduction steps, impact,
+`ayeshLK/lib-disruptor`. Include affected versions, reproduction steps, impact,
 and any suggested mitigation.
 
 If private reporting is unavailable, contact the repository owner privately

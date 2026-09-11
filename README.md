@@ -1,10 +1,10 @@
-# disruptor-go
+# lib-disruptor
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/ayeshLK/disruptor-go.svg)](https://pkg.go.dev/github.com/ayeshLK/disruptor-go)
-[![Release](https://img.shields.io/github/v/release/ayeshLK/disruptor-go)](https://github.com/ayeshLK/disruptor-go/releases/latest)
-[![CI](https://github.com/ayeshLK/disruptor-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ayeshLK/disruptor-go/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/ayeshLK/disruptor-go/branch/main/graph/badge.svg)](https://codecov.io/gh/ayeshLK/disruptor-go)
-[![License](https://img.shields.io/github/license/ayeshLK/disruptor-go)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ayeshLK/lib-disruptor.svg)](https://pkg.go.dev/github.com/ayeshLK/lib-disruptor)
+[![Release](https://img.shields.io/github/v/release/ayeshLK/lib-disruptor)](https://github.com/ayeshLK/lib-disruptor/releases/latest)
+[![CI](https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml/badge.svg)](https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ayeshLK/lib-disruptor/branch/main/graph/badge.svg)](https://codecov.io/gh/ayeshLK/lib-disruptor)
+[![License](https://img.shields.io/github/license/ayeshLK/lib-disruptor)](LICENSE)
 
 A generic, standard-library-only Go implementation of the core LMAX Disruptor
 protocol: reusable preallocated events, monotonic sequences, bounded
@@ -19,13 +19,13 @@ newer and may change before a stable release.
 Install the current release explicitly so builds remain reproducible:
 
 ```sh
-go get github.com/ayeshLK/disruptor-go@v0.1.0
+go get github.com/ayeshLK/lib-disruptor@v0.1.0
 ```
 
 Import the root package as `disruptor`:
 
 ```go
-import disruptor "github.com/ayeshLK/disruptor-go"
+import disruptor "github.com/ayeshLK/lib-disruptor"
 ```
 
 Because this is a pre-v1 module, review the [changelog](CHANGELOG.md) before
