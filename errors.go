@@ -21,6 +21,8 @@ var (
 	ErrInvalidBufferSize = errors.New("disruptor: buffer size must be a positive power of two")
 	// ErrInvalidProducerType indicates that the selected producer mode is unknown.
 	ErrInvalidProducerType = errors.New("disruptor: invalid producer type")
+	// ErrInvalidProducerWaitMode indicates that the selected producer wait mode is unknown.
+	ErrInvalidProducerWaitMode = errors.New("disruptor: invalid producer wait mode")
 	// ErrInvalidClaimSize indicates that a batch claim is outside the ring bounds.
 	ErrInvalidClaimSize = errors.New("disruptor: claim size must be between one and the buffer size")
 	// ErrInsufficientCapacity indicates that a non-blocking claim would overtake a gate.

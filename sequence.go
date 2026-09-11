@@ -22,10 +22,13 @@ const InitialSequence int64 = -1
 // Sequence is a padded, atomically updated logical position. A Sequence must
 // not be copied after first use; pass it by pointer.
 type Sequence struct {
-	_     [64]byte
-	value atomic.Int64
-	_     [64]byte
+	_       [64]byte
+	value   atomic.Int64
+	_       [64]byte
+	signals atomic.Pointer[sequenceSignals]
 }
+
+type sequenceSignals []*producerWaiter
 
 // NewSequence creates an atomic sequence at initial.
 func NewSequence(initial int64) *Sequence {
@@ -38,14 +41,92 @@ func NewSequence(initial int64) *Sequence {
 func (s *Sequence) Load() int64 { return s.value.Load() }
 
 // Store atomically replaces the current sequence.
-func (s *Sequence) Store(value int64) { s.value.Store(value) }
+func (s *Sequence) Store(value int64) {
+	s.store(value)
+	s.signalAll()
+}
 
 // Add atomically adds delta and returns the new sequence.
-func (s *Sequence) Add(delta int64) int64 { return s.value.Add(delta) }
+func (s *Sequence) Add(delta int64) int64 {
+	value := s.value.Add(delta)
+	s.signalAll()
+	return value
+}
 
 // CompareAndSwap atomically replaces old with new when the current value equals old.
 func (s *Sequence) CompareAndSwap(old, new int64) bool {
+	if !s.compareAndSwap(old, new) {
+		return false
+	}
+	s.signalAll()
+	return true
+}
+
+func (s *Sequence) store(value int64) { s.value.Store(value) }
+
+func (s *Sequence) compareAndSwap(old, new int64) bool {
 	return s.value.CompareAndSwap(old, new)
+}
+
+func (s *Sequence) addSignal(signal *producerWaiter) {
+	for {
+		current := s.signals.Load()
+		if current != nil {
+			for _, registered := range *current {
+				if registered == signal {
+					return
+				}
+			}
+		}
+		next := make(sequenceSignals, 0, signalCount(current)+1)
+		if current != nil {
+			next = append(next, (*current)...)
+		}
+		next = append(next, signal)
+		if s.signals.CompareAndSwap(current, &next) {
+			return
+		}
+	}
+}
+
+func (s *Sequence) removeSignal(signal *producerWaiter) {
+	for {
+		current := s.signals.Load()
+		if current == nil {
+			return
+		}
+		index := -1
+		for i, registered := range *current {
+			if registered == signal {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			return
+		}
+		next := make(sequenceSignals, 0, len(*current)-1)
+		next = append(next, (*current)[:index]...)
+		next = append(next, (*current)[index+1:]...)
+		if s.signals.CompareAndSwap(current, &next) {
+			return
+		}
+	}
+}
+
+func (s *Sequence) signalAll() {
+	if signals := s.signals.Load(); signals != nil {
+		for _, signal := range *signals {
+			signal.signalAll()
+		}
+	}
+}
+
+func signalCount(signals *sequenceSignals) int {
+	if signals == nil {
+		return 0
+	}
+	return len(*signals)
 }
 
 type sequenceReader interface {

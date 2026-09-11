@@ -51,6 +51,7 @@ type report struct {
 	Consumers           int     `json:"consumers"`
 	RingSize            int64   `json:"ring_size"`
 	BatchSize           int64   `json:"batch_size"`
+	ProducerWait        string  `json:"producer_wait"`
 	ElapsedSeconds      float64 `json:"elapsed_seconds"`
 	PublishedPerSecond  float64 `json:"published_per_second"`
 	DeliveriesPerSecond float64 `json:"deliveries_per_second"`
@@ -67,6 +68,7 @@ func main() {
 	consumers := flag.Int("consumers", 1, "broadcast consumer goroutines")
 	ringSize := flag.Int64("ring-size", 65_536, "power-of-two ring size")
 	batchSize := flag.Int64("batch-size", 256, "maximum consumer batch size")
+	producerWait := flag.String("producer-wait", "yielding", "producer capacity wait: yielding, blocking, or busy-spin")
 	sampleEvery := flag.Int64("sample-every", 1024, "sample one latency per N publications; zero disables")
 	timeout := flag.Duration("timeout", 30*time.Second, "overall timeout")
 	flag.Parse()
@@ -78,8 +80,19 @@ func main() {
 	if *producers > 1 {
 		producerType = disruptor.MultiProducer
 	}
+	producerWaitMode := disruptor.ProducerWaitYielding
+	switch *producerWait {
+	case "yielding":
+	case "blocking":
+		producerWaitMode = disruptor.ProducerWaitBlocking
+	case "busy-spin":
+		producerWaitMode = disruptor.ProducerWaitBusySpin
+	default:
+		fatal(fmt.Errorf("producer-wait must be yielding, blocking, or busy-spin"))
+	}
 	ring, err := disruptor.New(*ringSize, producerType,
-		func() *loadEvent { return new(loadEvent) }, disruptor.YieldingWait())
+		func() *loadEvent { return new(loadEvent) }, disruptor.YieldingWait(),
+		disruptor.WithProducerWait(producerWaitMode))
 	if err != nil {
 		fatal(err)
 	}
@@ -158,7 +171,8 @@ func main() {
 	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
 	result := report{
 		Events: *events, Producers: *producers, Consumers: *consumers,
-		RingSize: *ringSize, BatchSize: *batchSize, ElapsedSeconds: elapsed.Seconds(),
+		RingSize: *ringSize, BatchSize: *batchSize, ProducerWait: *producerWait,
+		ElapsedSeconds:      elapsed.Seconds(),
 		PublishedPerSecond:  float64(*events) / elapsed.Seconds(),
 		DeliveriesPerSecond: float64(*events*int64(*consumers)) / elapsed.Seconds(),
 		LatencySamples:      len(samples), GOMAXPROCS: runtime.GOMAXPROCS(0),

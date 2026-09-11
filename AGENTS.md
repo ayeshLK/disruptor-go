@@ -18,6 +18,7 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `sequencer.go`: shared sequencer contract, gates, close, and capacity waiting.
 - `sequencer_single.go`: single-producer claim/publish path.
 - `sequencer_multi.go`: CAS claims and per-slot publication availability.
+- `producer_wait.go`: configurable producer capacity-wait policies and wakeups.
 - `barrier.go`: consumer dependency barriers and gap-aware visibility.
 - `wait_strategy.go`: blocking, sleeping, yielding, and busy-spin waits.
 - `processor.go`: ordered batch consumer lifecycle and acknowledgement.
@@ -45,6 +46,9 @@ Treat these as design constraints, not implementation details:
   later claimed sequences have already been published.
 - Producers may not wrap over the minimum gating sequence. Only terminal
   consumers should gate a pipeline; parallel broadcast consumers all gate.
+- Blocking producer waits snapshot their wake channel before rechecking the
+  minimum gate, preventing lost wakeups. Gate advancement and removal must wake
+  blocked producers; yielding remains the default policy.
 - A dependent barrier cannot advance beyond its slowest upstream sequence.
 - A processor advances its sequence only after the whole selected batch succeeds.
   Handler failure or panic leaves that batch unacknowledged and therefore
@@ -142,12 +146,12 @@ Keep third-party actions pinned to full commit SHAs and workflow permissions at
 least privilege. Do not create repositories, tags, releases, commits, pushes, or
 remote settings unless the user explicitly authorizes those external changes.
 
-## Current handoff state (2026-09-11)
+## Current handoff state (2026-09-12)
 
 - `v0.1.0` is the current published release. The proposed v1 backlog is tracked
   by issue #18.
-- Protocol/lifecycle issues #7, #8, and #11 are complete. The next approved item
-  in that group is #12, configurable producer capacity waiting.
+- Protocol/lifecycle issues #7, #8, #11, and #12 are complete. Await manual
+  prioritization of the remaining v1 tracker items.
 
 ## Performance work
 

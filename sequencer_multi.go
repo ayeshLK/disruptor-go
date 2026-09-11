@@ -17,7 +17,6 @@ package disruptor
 import (
 	"context"
 	"math/bits"
-	"runtime"
 	"sync/atomic"
 )
 
@@ -29,13 +28,13 @@ type multiProducerSequencer struct {
 	indexShift uint
 }
 
-func newMultiProducerSequencer(size int64, wait WaitStrategy) *multiProducerSequencer {
+func newMultiProducerSequencer(size int64, wait WaitStrategy, producerWait ProducerWaitMode) *multiProducerSequencer {
 	available := make([]atomic.Int64, size)
 	for i := range available {
 		available[i].Store(-1)
 	}
 	return &multiProducerSequencer{
-		sequencerBase: newSequencerBase(size, wait),
+		sequencerBase: newSequencerBase(size, wait, producerWait),
 		gateCache:     NewSequence(InitialSequence),
 		available:     available,
 		indexMask:     uint64(size - 1),
@@ -56,19 +55,17 @@ func (s *multiProducerSequencer) Next(ctx context.Context, count int64) (int64, 
 		wrapPoint := next - s.bufferSize
 		cached := s.gateCache.Load()
 		if wrapPoint > cached || cached > current {
+			prepared := s.producerWait.prepare()
 			minimum := s.minimumGate(current)
 			if wrapPoint > minimum {
-				select {
-				case <-ctx.Done():
-					return 0, ctx.Err()
-				default:
-					runtime.Gosched()
-					continue
+				if err := s.producerWait.wait(ctx, prepared, s.closedCh); err != nil {
+					return 0, err
 				}
+				continue
 			}
-			s.gateCache.Store(minimum)
+			s.gateCache.store(minimum)
 		}
-		if s.cursor.CompareAndSwap(current, next) {
+		if s.cursor.compareAndSwap(current, next) {
 			return next, nil
 		}
 	}
@@ -88,12 +85,12 @@ func (s *multiProducerSequencer) TryNext(count int64) (int64, error) {
 		cached := s.gateCache.Load()
 		if wrapPoint > cached || cached > current {
 			minimum := s.minimumGate(current)
-			s.gateCache.Store(minimum)
+			s.gateCache.store(minimum)
 			if wrapPoint > minimum {
 				return 0, ErrInsufficientCapacity
 			}
 		}
-		if s.cursor.CompareAndSwap(current, next) {
+		if s.cursor.compareAndSwap(current, next) {
 			return next, nil
 		}
 	}
