@@ -52,6 +52,8 @@ Treat these as design constraints, not implementation details:
   permanent publication gap.
 - Events must not be retained or mutated after a consumer advances its sequence.
 - Context cancellation, `Halt`, barrier alerts, and `Close` must unblock waiters.
+  Close is immediate rather than draining: visible events remain readable, while
+  waits for unavailable or dependency-gated events return `ErrClosed`.
 - Types containing atomics must not be copied after first use; use pointers.
 
 When changing concurrency code, reason explicitly about claim order, publish
@@ -143,9 +145,10 @@ remote settings unless the user explicitly authorizes those external changes.
 - There are no open pull requests. The `v1` issue label groups the proposed,
   intentionally unprioritized stable-release backlog in issue #18. Individual
   work items are issues #7 through #17.
-- Issue #7 records a known lifecycle gap: `RingBuffer.Close` wakes producer
-  capacity waits, but consumer barriers and processors do not yet reliably
-  observe ring closure. Treat it as correctness work, not merely API polish.
+- Protocol and lifecycle work in issues #7, #8, #11, and #12 is approved to
+  proceed in dependency order. Issue #7 establishes immediate close propagation;
+  issue #8 owns graceful drain semantics, followed by processor contracts in #11
+  and configurable producer waiting in #12.
 - The proposed v1 boundary remains in-process and standard-library-only. The v1
   tracker explicitly excludes a topology DSL, worker pool, persistence, CPU
   affinity, cross-process transport, cgo, `unsafe`, and channel substitution.

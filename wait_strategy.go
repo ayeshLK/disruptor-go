@@ -25,8 +25,14 @@ import (
 // WaitStrategy controls how consumers wait for a sequence to become visible.
 // Implementations must be safe for concurrent use by multiple barriers.
 type WaitStrategy interface {
-	waitFor(context.Context, int64, sequenceReader, sequenceReader, *atomic.Bool) (int64, error)
+	waitFor(context.Context, int64, sequenceReader, sequenceReader, waitState) (int64, error)
 	signalAll()
+}
+
+type waitState struct {
+	alerted  *atomic.Bool
+	closed   *atomic.Bool
+	closedCh <-chan struct{}
 }
 
 // BusySpinWaitStrategy continuously polls a dependency and consumes a CPU core.
@@ -35,13 +41,13 @@ type BusySpinWaitStrategy struct{}
 // BusySpinWait returns a strategy intended for consumers on dedicated cores.
 func BusySpinWait() WaitStrategy { return BusySpinWaitStrategy{} }
 
-func (BusySpinWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, alerted *atomic.Bool) (int64, error) {
+func (BusySpinWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, state waitState) (int64, error) {
 	for spins := 0; ; spins++ {
 		if available := dependent.Load(); available >= desired {
 			return available, nil
 		}
 		if spins&63 == 0 {
-			if err := checkWait(ctx, alerted); err != nil {
+			if err := checkWait(ctx, state); err != nil {
 				return 0, err
 			}
 		}
@@ -56,12 +62,12 @@ type YieldingWaitStrategy struct{}
 // YieldingWait returns a scheduler-yielding wait strategy.
 func YieldingWait() WaitStrategy { return YieldingWaitStrategy{} }
 
-func (YieldingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, alerted *atomic.Bool) (int64, error) {
+func (YieldingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, state waitState) (int64, error) {
 	for {
 		if available := dependent.Load(); available >= desired {
 			return available, nil
 		}
-		if err := checkWait(ctx, alerted); err != nil {
+		if err := checkWait(ctx, state); err != nil {
 			return 0, err
 		}
 		runtime.Gosched()
@@ -85,13 +91,13 @@ func SleepingWait() WaitStrategy {
 	return SleepingWaitStrategy{SpinTries: 100, YieldTries: 100, Sleep: time.Microsecond}
 }
 
-func (s SleepingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, alerted *atomic.Bool) (int64, error) {
+func (s SleepingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequenceReader, dependent sequenceReader, state waitState) (int64, error) {
 	tries := 0
 	for {
 		if available := dependent.Load(); available >= desired {
 			return available, nil
 		}
-		if err := checkWait(ctx, alerted); err != nil {
+		if err := checkWait(ctx, state); err != nil {
 			return 0, err
 		}
 		switch {
@@ -106,6 +112,14 @@ func (s SleepingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequ
 					<-timer.C
 				}
 				return 0, ctx.Err()
+			case <-state.closedCh:
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return 0, ErrClosed
 			case <-timer.C:
 			}
 		}
@@ -127,9 +141,9 @@ func BlockingWait() WaitStrategy {
 	return &BlockingWaitStrategy{ch: make(chan struct{})}
 }
 
-func (s *BlockingWaitStrategy) waitFor(ctx context.Context, desired int64, cursor sequenceReader, dependent sequenceReader, alerted *atomic.Bool) (int64, error) {
+func (s *BlockingWaitStrategy) waitFor(ctx context.Context, desired int64, cursor sequenceReader, dependent sequenceReader, state waitState) (int64, error) {
 	for cursor.Load() < desired {
-		if err := checkWait(ctx, alerted); err != nil {
+		if err := checkWait(ctx, state); err != nil {
 			return 0, err
 		}
 		s.mu.Lock()
@@ -142,13 +156,15 @@ func (s *BlockingWaitStrategy) waitFor(ctx context.Context, desired int64, curso
 		case <-ch:
 		case <-ctx.Done():
 			return 0, ctx.Err()
+		case <-state.closedCh:
+			return 0, ErrClosed
 		}
 	}
 	for {
 		if available := dependent.Load(); available >= desired {
 			return available, nil
 		}
-		if err := checkWait(ctx, alerted); err != nil {
+		if err := checkWait(ctx, state); err != nil {
 			return 0, err
 		}
 		runtime.Gosched()
@@ -162,9 +178,12 @@ func (s *BlockingWaitStrategy) signalAll() {
 	s.mu.Unlock()
 }
 
-func checkWait(ctx context.Context, alerted *atomic.Bool) error {
-	if alerted.Load() {
+func checkWait(ctx context.Context, state waitState) error {
+	if state.alerted.Load() {
 		return ErrAlerted
+	}
+	if state.closed.Load() {
+		return ErrClosed
 	}
 	select {
 	case <-ctx.Done():
