@@ -138,7 +138,26 @@ topologies.
 drain was interrupted; inspect processor results separately for handler failures.
 Use `Close` when consumers should stop immediately without draining.
 
+## Processor supervision
+
+Treat the value returned by `BatchProcessor.Run` as the processor supervision
+path. The processor does not log failures or invoke a second error callback, so
+applications can apply their own retry, shutdown, and reporting policy exactly
+once.
+
+A returned handler error is wrapped in `HandlerError`, which exposes the failing
+sequence and supports `errors.Is` and `errors.As`. A handler panic is recovered
+and returned as `HandlerPanicError`; if its value implements `error`, it also
+participates in `errors.Is` and `errors.As`. Either failure leaves the selected
+batch unacknowledged and replayable.
+
+`Halt` is harmless while idle. During a run it wakes the processor, lets the
+currently selected batch finish, and returns `nil`; `Running` remains true until
+that run has returned. A processor may be restarted after a halt, context
+cancellation, external barrier alert, handler error, or recovered panic. A closed
+ring is terminal, so subsequent runs return `ErrClosed`.
 ## Ownership and safety
+
 
 - Events are created once by `EventFactory` and reused.
 - A producer owns a claimed event until publication.

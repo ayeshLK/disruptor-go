@@ -17,6 +17,7 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `sequence.go`: padded atomic sequence and minimum-sequence helpers.
 - `sequencer.go`: shared sequencer contract, gates, close, and capacity waiting.
 - `sequencer_single.go`: single-producer claim/publish path.
+- `processor_error.go`: sequence-aware handler error and panic contracts.
 - `sequencer_multi.go`: CAS claims and per-slot publication availability.
 - `barrier.go`: consumer dependency barriers and gap-aware visibility.
 - `wait_strategy.go`: blocking, sleeping, yielding, and busy-spin waits.
@@ -46,7 +47,8 @@ Treat these as design constraints, not implementation details:
   consumers should gate a pipeline; parallel broadcast consumers all gate.
 - A dependent barrier cannot advance beyond its slowest upstream sequence.
 - A processor advances its sequence only after the whole selected batch succeeds.
-  Handler failure leaves that batch unacknowledged and therefore replayable.
+  Handler failure or panic leaves that batch unacknowledged and therefore
+  replayable; `Run` is the sole error-reporting path.
 - `Publish` and `TryPublish` publish their claimed sequence even if the translator
   returns an error. Preserve this behavior so a failed translator cannot leave a
   permanent publication gap.
@@ -149,15 +151,11 @@ remote settings unless the user explicitly authorizes those external changes.
 - There are no open pull requests. The `v1` issue label groups the proposed,
   intentionally unprioritized stable-release backlog in issue #18. Individual
   work items are issues #7 through #17.
-- Protocol and lifecycle work in issues #7, #8, #11, and #12 is approved to
-  proceed in dependency order. Issue #7 establishes immediate close propagation;
-  issue #8 owns graceful drain semantics, followed by processor contracts in #11
-  and configurable producer waiting in #12.
 - The proposed v1 boundary remains in-process and standard-library-only. The v1
   tracker explicitly excludes a topology DSL, worker pool, persistence, CPU
   affinity, cross-process transport, cgo, `unsafe`, and channel substitution.
-- After issues #7 and #8, continue the approved protocol/lifecycle group with
-  processor contracts in #11 and configurable producer waiting in #12.
+- Issues #7 and #8 establish close and drain behavior. Issue #11 establishes the
+  processor failure, panic, halt, and restart contracts; continue with #12.
 
 ## Performance work
 
