@@ -54,6 +54,10 @@ Treat these as design constraints, not implementation details:
 - Context cancellation, `Halt`, barrier alerts, and `Close` must unblock waiters.
   Close is immediate rather than draining: visible events remain readable, while
   waits for unavailable or dependency-gated events return `ErrClosed`.
+- `Shutdown` may begin only after publisher operations return. It seals future
+  claims, snapshots the current gating sequences, waits for their minimum to
+  reach the final claim boundary, and closes consumer waits on every return path.
+  A context error means the drain was interrupted, not that the ring stayed open.
 - Types containing atomics must not be copied after first use; use pointers.
 
 When changing concurrency code, reason explicitly about claim order, publish
@@ -152,8 +156,8 @@ remote settings unless the user explicitly authorizes those external changes.
 - The proposed v1 boundary remains in-process and standard-library-only. The v1
   tracker explicitly excludes a topology DSL, worker pool, persistence, CPU
   affinity, cross-process transport, cgo, `unsafe`, and channel substitution.
-- The next planning step is maintainer review and prioritization of issue #18.
-  Do not assume every v1-labeled issue has been approved for implementation.
+- After issues #7 and #8, continue the approved protocol/lifecycle group with
+  processor contracts in #11 and configurable producer waiting in #12.
 
 ## Performance work
 

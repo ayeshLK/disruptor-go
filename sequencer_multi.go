@@ -48,7 +48,7 @@ func (s *multiProducerSequencer) Next(ctx context.Context, count int64) (int64, 
 		return 0, ErrInvalidClaimSize
 	}
 	for {
-		if s.closed.Load() {
+		if s.sealed.Load() {
 			return 0, ErrClosed
 		}
 		current := s.cursor.Load()
@@ -79,7 +79,7 @@ func (s *multiProducerSequencer) TryNext(count int64) (int64, error) {
 		return 0, ErrInvalidClaimSize
 	}
 	for {
-		if s.closed.Load() {
+		if s.sealed.Load() {
 			return 0, ErrClosed
 		}
 		current := s.cursor.Load()
@@ -129,6 +129,13 @@ func (s *multiProducerSequencer) NewBarrier(dependencies ...*Sequence) *Sequence
 	barrier := s.sequencerBase.NewBarrier(dependencies...)
 	barrier.sequencer = s
 	return barrier
+}
+
+func (s *multiProducerSequencer) Shutdown(ctx context.Context) error {
+	if err := s.beginShutdown(); err != nil {
+		return err
+	}
+	return s.awaitShutdown(ctx, s.cursor.Load())
 }
 
 func (s *multiProducerSequencer) index(sequence int64) int {

@@ -47,6 +47,7 @@ type Sequencer interface {
 	RemoveGatingSequence(*Sequence) bool
 	NewBarrier(...*Sequence) *SequenceBarrier
 	Close()
+	Shutdown(context.Context) error
 }
 
 type sequencerBase struct {
@@ -55,6 +56,7 @@ type sequencerBase struct {
 	wait       WaitStrategy
 	gating     atomic.Pointer[sequenceList]
 	closed     atomic.Bool
+	sealed     atomic.Bool
 	closedCh   chan struct{}
 	closeOnce  sync.Once
 }
@@ -133,6 +135,7 @@ func (b *sequencerBase) NewBarrier(dependencies ...*Sequence) *SequenceBarrier {
 }
 
 func (b *sequencerBase) Close() {
+	b.sealed.Store(true)
 	b.closeOnce.Do(func() {
 		b.closed.Store(true)
 		close(b.closedCh)
@@ -142,7 +145,7 @@ func (b *sequencerBase) Close() {
 
 func (b *sequencerBase) waitForCapacity(ctx context.Context, wrapPoint, fallback int64) (int64, error) {
 	for {
-		if b.closed.Load() {
+		if b.sealed.Load() {
 			return 0, ErrClosed
 		}
 		minimum := b.minimumGate(fallback)
@@ -156,4 +159,28 @@ func (b *sequencerBase) waitForCapacity(ctx context.Context, wrapPoint, fallback
 			runtime.Gosched()
 		}
 	}
+}
+
+func (b *sequencerBase) beginShutdown() error {
+	if b.closed.Load() || !b.sealed.CompareAndSwap(false, true) {
+		return ErrClosed
+	}
+	return nil
+}
+
+func (b *sequencerBase) awaitShutdown(ctx context.Context, boundary int64) error {
+	defer b.Close()
+	gates := b.gates()
+	for minimumSequence(gates, boundary) < boundary {
+		if b.closed.Load() {
+			return ErrClosed
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			runtime.Gosched()
+		}
+	}
+	return nil
 }

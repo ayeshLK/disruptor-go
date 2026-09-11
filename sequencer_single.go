@@ -31,7 +31,7 @@ func newSingleProducerSequencer(size int64, wait WaitStrategy) *singleProducerSe
 }
 
 func (s *singleProducerSequencer) Next(ctx context.Context, count int64) (int64, error) {
-	if s.closed.Load() {
+	if s.sealed.Load() {
 		return 0, ErrClosed
 	}
 	if count < 1 || count > s.bufferSize {
@@ -51,7 +51,7 @@ func (s *singleProducerSequencer) Next(ctx context.Context, count int64) (int64,
 }
 
 func (s *singleProducerSequencer) TryNext(count int64) (int64, error) {
-	if s.closed.Load() {
+	if s.sealed.Load() {
 		return 0, ErrClosed
 	}
 	if count < 1 || count > s.bufferSize {
@@ -91,4 +91,11 @@ func (s *singleProducerSequencer) NewBarrier(dependencies ...*Sequence) *Sequenc
 	barrier := s.sequencerBase.NewBarrier(dependencies...)
 	barrier.sequencer = s
 	return barrier
+}
+
+func (s *singleProducerSequencer) Shutdown(ctx context.Context) error {
+	if err := s.beginShutdown(); err != nil {
+		return err
+	}
+	return s.awaitShutdown(ctx, s.nextValue)
 }
