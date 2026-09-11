@@ -22,9 +22,9 @@ type singleProducerSequencer struct {
 	cachedGate int64
 }
 
-func newSingleProducerSequencer(size int64, wait WaitStrategy) *singleProducerSequencer {
+func newSingleProducerSequencer(size int64, wait WaitStrategy, producerWait ProducerWaitMode) *singleProducerSequencer {
 	return &singleProducerSequencer{
-		sequencerBase: newSequencerBase(size, wait),
+		sequencerBase: newSequencerBase(size, wait, producerWait),
 		nextValue:     InitialSequence,
 		cachedGate:    InitialSequence,
 	}
@@ -71,7 +71,7 @@ func (s *singleProducerSequencer) TryNext(count int64) (int64, error) {
 }
 
 func (s *singleProducerSequencer) Publish(_, high int64) {
-	s.cursor.Store(high)
+	s.cursor.store(high)
 	s.wait.signalAll()
 }
 

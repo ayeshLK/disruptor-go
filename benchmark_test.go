@@ -80,3 +80,44 @@ func BenchmarkBufferedChannelSPSC(b *testing.B) {
 	close(channel)
 	<-done
 }
+
+func BenchmarkProducerWaitUnderSlowGate(b *testing.B) {
+	for name, mode := range map[string]ProducerWaitMode{
+		"yielding":  ProducerWaitYielding,
+		"blocking":  ProducerWaitBlocking,
+		"busy-spin": ProducerWaitBusySpin,
+	} {
+		b.Run(name, func(b *testing.B) {
+			ring, _ := New(1, SingleProducer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait(), WithProducerWait(mode))
+			gate := NewSequence(InitialSequence)
+			ring.AddGatingSequences(gate)
+			barrier := ring.NewBarrier()
+			ctx := context.Background()
+			done := make(chan error, 1)
+			go func() {
+				for sequence := int64(0); sequence < int64(b.N); sequence++ {
+					if _, err := barrier.WaitFor(ctx, sequence); err != nil {
+						done <- err
+						return
+					}
+					runtime.Gosched()
+					gate.Store(sequence)
+				}
+				done <- nil
+			}()
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				sequence, err := ring.Next(ctx)
+				if err != nil {
+					b.Fatal(err)
+				}
+				ring.PublishSequence(sequence)
+			}
+			if err := <-done; err != nil {
+				b.Fatal(err)
+			}
+		})
+	}
+}

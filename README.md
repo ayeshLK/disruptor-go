@@ -93,6 +93,32 @@ ring.PublishRange(low, high)
 
 Use `MultiProducer` whenever publisher calls can overlap.
 
+## Producer capacity waits
+
+Producer capacity waiting is configured independently from the consumer wait
+strategy passed to `New`. Yielding remains the default for compatibility:
+
+```go
+ring, err := disruptor.New(
+    1024,
+    disruptor.MultiProducer,
+    factory,
+    disruptor.BlockingWait(),
+    disruptor.WithProducerWait(disruptor.ProducerWaitBlocking),
+)
+```
+
+| Mode | Capacity behavior | Typical use |
+|---|---|---|
+| `ProducerWaitYielding` | Yields to the Go scheduler | General-purpose default |
+| `ProducerWaitBlocking` | Sleeps until gates advance | Shared hosts and sustained backpressure |
+| `ProducerWaitBusySpin` | Continuously checks capacity | Dedicated cores and lowest handoff latency |
+
+Blocking producer waits are notified by `Sequence.Store`, `Sequence.Add`, a
+successful `Sequence.CompareAndSwap`, gate removal, shutdown, and close. Spurious
+wakeups only recheck capacity. `TryNext`, `TryNextN`, and `TryPublish` remain
+non-blocking and do not use this policy.
+
 ## Consumer graphs
 
 Parallel broadcast:
@@ -123,8 +149,8 @@ protects both pipeline stages.
 | `YieldingWait()` | Yield while waiting | Busy systems with spare cores |
 | `BusySpinWait()` | Continuously check | Dedicated cores, lowest jitter |
 
-Wait strategies govern consumers. Producers waiting for capacity yield to the
-Go scheduler.
+Wait strategies govern consumers; producer capacity waits use the independently
+configured policy above.
 
 ## Graceful shutdown
 
@@ -196,7 +222,8 @@ go run ./cmd/loadtest \
   -producers=1 \
   -consumers=1 \
   -ring-size=65536 \
-  -batch-size=256
+  -batch-size=256 \
+  -producer-wait=yielding
 ```
 
 The load command prints JSON with publication and delivery throughput plus

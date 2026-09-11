@@ -51,25 +51,28 @@ type Sequencer interface {
 }
 
 type sequencerBase struct {
-	bufferSize int64
-	cursor     *Sequence
-	wait       WaitStrategy
-	gating     atomic.Pointer[sequenceList]
-	closed     atomic.Bool
-	sealed     atomic.Bool
-	closedCh   chan struct{}
-	closeOnce  sync.Once
+	bufferSize   int64
+	cursor       *Sequence
+	wait         WaitStrategy
+	producerWait *producerWaiter
+	gating       atomic.Pointer[sequenceList]
+	gatingMu     sync.Mutex
+	closed       atomic.Bool
+	sealed       atomic.Bool
+	closedCh     chan struct{}
+	closeOnce    sync.Once
 }
 
-func newSequencerBase(size int64, wait WaitStrategy) *sequencerBase {
+func newSequencerBase(size int64, wait WaitStrategy, producerWait ProducerWaitMode) *sequencerBase {
 	if wait == nil {
 		wait = BlockingWait()
 	}
 	b := &sequencerBase{
-		bufferSize: size,
-		cursor:     NewSequence(InitialSequence),
-		wait:       wait,
-		closedCh:   make(chan struct{}),
+		bufferSize:   size,
+		cursor:       NewSequence(InitialSequence),
+		wait:         wait,
+		producerWait: newProducerWaiter(producerWait),
+		closedCh:     make(chan struct{}),
 	}
 	empty := sequenceList{}
 	b.gating.Store(&empty)
@@ -82,44 +85,60 @@ func (b *sequencerBase) BufferSize() int64 { return b.bufferSize }
 func (b *sequencerBase) gates() []*Sequence { return *b.gating.Load() }
 
 func (b *sequencerBase) AddGatingSequences(sequences ...*Sequence) {
-	for {
-		current := b.gating.Load()
-		next := make(sequenceList, 0, len(*current)+len(sequences))
-		next = append(next, (*current)...)
-		cursor := b.cursor.Load()
-		for _, sequence := range sequences {
-			if sequence == nil {
-				continue
-			}
-			sequence.Store(cursor)
-			next = append(next, sequence)
-		}
-		if b.gating.CompareAndSwap(current, &next) {
-			return
-		}
+	b.gatingMu.Lock()
+	defer b.gatingMu.Unlock()
+	if b.closed.Load() {
+		return
 	}
+	current := b.gating.Load()
+	next := make(sequenceList, 0, len(*current)+len(sequences))
+	next = append(next, (*current)...)
+	cursor := b.cursor.Load()
+	for _, sequence := range sequences {
+		if sequence == nil {
+			continue
+		}
+		sequence.Store(cursor)
+		if b.producerWait.needsSignals() {
+			sequence.addSignal(b.producerWait)
+		}
+		next = append(next, sequence)
+	}
+	b.gating.Store(&next)
 }
 
 func (b *sequencerBase) RemoveGatingSequence(target *Sequence) bool {
-	for {
-		current := b.gating.Load()
-		found := -1
-		for i, sequence := range *current {
+	b.gatingMu.Lock()
+	defer b.gatingMu.Unlock()
+	current := b.gating.Load()
+	found := -1
+	for i, sequence := range *current {
+		if sequence == target {
+			found = i
+			break
+		}
+	}
+	if found < 0 {
+		return false
+	}
+	next := make(sequenceList, 0, len(*current)-1)
+	next = append(next, (*current)[:found]...)
+	next = append(next, (*current)[found+1:]...)
+	b.gating.Store(&next)
+	if b.producerWait.needsSignals() {
+		stillRegistered := false
+		for _, sequence := range next {
 			if sequence == target {
-				found = i
+				stillRegistered = true
 				break
 			}
 		}
-		if found < 0 {
-			return false
+		if !stillRegistered {
+			target.removeSignal(b.producerWait)
 		}
-		next := make(sequenceList, 0, len(*current)-1)
-		next = append(next, (*current)[:found]...)
-		next = append(next, (*current)[found+1:]...)
-		if b.gating.CompareAndSwap(current, &next) {
-			return true
-		}
+		b.producerWait.signalAll()
 	}
+	return true
 }
 
 func (b *sequencerBase) minimumGate(fallback int64) int64 {
@@ -139,7 +158,9 @@ func (b *sequencerBase) Close() {
 	b.closeOnce.Do(func() {
 		b.closed.Store(true)
 		close(b.closedCh)
+		b.producerWait.signalAll()
 		b.wait.signalAll()
+		b.removeGateSignals()
 	})
 }
 
@@ -148,15 +169,13 @@ func (b *sequencerBase) waitForCapacity(ctx context.Context, wrapPoint, fallback
 		if b.sealed.Load() {
 			return 0, ErrClosed
 		}
+		prepared := b.producerWait.prepare()
 		minimum := b.minimumGate(fallback)
 		if wrapPoint <= minimum {
 			return minimum, nil
 		}
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		default:
-			runtime.Gosched()
+		if err := b.producerWait.wait(ctx, prepared, b.closedCh); err != nil {
+			return 0, err
 		}
 	}
 }
@@ -165,7 +184,25 @@ func (b *sequencerBase) beginShutdown() error {
 	if b.closed.Load() || !b.sealed.CompareAndSwap(false, true) {
 		return ErrClosed
 	}
+	b.producerWait.signalAll()
 	return nil
+}
+
+func (b *sequencerBase) removeGateSignals() {
+	if !b.producerWait.needsSignals() {
+		return
+	}
+	b.gatingMu.Lock()
+	defer b.gatingMu.Unlock()
+	gates := b.gates()
+	seen := make(map[*Sequence]struct{}, len(gates))
+	for _, sequence := range gates {
+		if _, exists := seen[sequence]; exists {
+			continue
+		}
+		seen[sequence] = struct{}{}
+		sequence.removeSignal(b.producerWait)
+	}
 }
 
 func (b *sequencerBase) awaitShutdown(ctx context.Context, boundary int64) error {

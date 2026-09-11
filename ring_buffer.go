@@ -34,12 +34,19 @@ type RingBuffer[T any] struct {
 }
 
 // New creates a ring buffer with preallocated events and the selected producer mode.
-func New[T any](size int64, producerType ProducerType, factory EventFactory[T], wait WaitStrategy) (*RingBuffer[T], error) {
+// Producer claims yield while waiting for capacity unless configured otherwise.
+func New[T any](size int64, producerType ProducerType, factory EventFactory[T], wait WaitStrategy, options ...RingOption) (*RingBuffer[T], error) {
 	if size < 1 || size&(size-1) != 0 {
 		return nil, ErrInvalidBufferSize
 	}
 	if factory == nil {
 		return nil, ErrNilFactory
+	}
+	config := ringConfig{producerWait: ProducerWaitYielding}
+	for _, option := range options {
+		if err := option(&config); err != nil {
+			return nil, err
+		}
 	}
 	entries := make([]T, int(size))
 	for i := range entries {
@@ -49,9 +56,9 @@ func New[T any](size int64, producerType ProducerType, factory EventFactory[T], 
 	var sequencer Sequencer
 	switch producerType {
 	case SingleProducer:
-		sequencer = newSingleProducerSequencer(size, wait)
+		sequencer = newSingleProducerSequencer(size, wait, config.producerWait)
 	case MultiProducer:
-		sequencer = newMultiProducerSequencer(size, wait)
+		sequencer = newMultiProducerSequencer(size, wait, config.producerWait)
 	default:
 		return nil, ErrInvalidProducerType
 	}
