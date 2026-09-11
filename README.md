@@ -126,6 +126,18 @@ protects both pipeline stages.
 Wait strategies govern consumers. Producers waiting for capacity yield to the
 Go scheduler.
 
+## Graceful shutdown
+
+Stop and join publisher goroutines before calling `Shutdown`. It rejects future
+claims, captures the final claimed sequence, waits for the gating sequences
+registered at that point, and then closes consumer waits. Because only terminal
+consumers should gate the ring, the same operation drains broadcast and pipeline
+topologies.
+
+`Shutdown` always closes the ring before returning. A context error means the
+drain was interrupted; inspect processor results separately for handler failures.
+Use `Close` when consumers should stop immediately without draining.
+
 ## Ownership and safety
 
 - Events are created once by `EventFactory` and reused.
@@ -136,11 +148,8 @@ Go scheduler.
 - Handler errors leave the current batch unacknowledged. Restarting that
   processor replays the batch, so restartable handlers should be idempotent.
 - Build and test applications with the race detector.
-- `Close` immediately rejects future claims and unblocks waits for unavailable
-  sequences with `ErrClosed`.
-- Events published before `Close` remain visible, but `Close` does not wait for
-  consumers to process them. Applications that require draining must first wait
-  for their terminal consumer sequences to reach the producer cursor.
+- `Close` unblocks unavailable consumer waits with `ErrClosed`; `Shutdown`
+  drains registered terminal gates before producing the same terminal signal.
 
 Go atomic publication and observation establish the visibility order. Go
 atomics are sequentially consistent.

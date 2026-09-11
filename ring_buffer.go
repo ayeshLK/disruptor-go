@@ -142,7 +142,16 @@ func (r *RingBuffer[T]) RemoveGatingSequence(sequence *Sequence) bool {
 	return r.sequencer.RemoveGatingSequence(sequence)
 }
 
-// Close immediately prevents further claims and unblocks waits for unavailable
-// sequences with ErrClosed. Published sequences remain visible; Close does not
-// wait for consumers to process them.
+// Shutdown prevents future claims, waits for the gating sequences present when
+// it begins to acknowledge the final claimed sequence, and then closes consumer
+// waits. Publisher operations must have returned before Shutdown is called.
+// Shutdown returns a context error if draining does not complete; the ring is
+// closed whether draining succeeds or fails.
+func (r *RingBuffer[T]) Shutdown(ctx context.Context) error {
+	return r.sequencer.Shutdown(ctx)
+}
+
+// Close immediately prevents future claims and unblocks waits for unavailable
+// sequences with ErrClosed. Use Shutdown to drain registered gating sequences
+// before closing consumers.
 func (r *RingBuffer[T]) Close() { r.sequencer.Close() }

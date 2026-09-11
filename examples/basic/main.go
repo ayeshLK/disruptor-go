@@ -16,9 +16,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
-	"runtime"
 
 	disruptor "github.com/ayeshLK/lib-disruptor"
 )
@@ -48,11 +48,10 @@ func main() {
 	}); err != nil {
 		log.Fatal(err)
 	}
-	for processor.Sequence().Load() < 0 {
-		runtime.Gosched()
+	if err := ring.Shutdown(context.Background()); err != nil {
+		log.Fatal(err)
 	}
-	processor.Halt()
-	if err := <-done; err != nil {
+	if err := <-done; !errors.Is(err, disruptor.ErrClosed) {
 		log.Fatal(err)
 	}
 }
