@@ -71,5 +71,8 @@ actions to full commit SHAs.
 ## Repository hygiene and licensing
 
 Do not commit credentials, binaries, coverage profiles, local workspaces, editor
-state, or profiles. Contributions intentionally submitted to this project are
+state, or profiles. Every Go source file, including tests, examples, benchmarks,
+and commands, must begin with the repository's Apache-2.0 header and `Copyright
+2026 Ayesh Almeida` statement. Contributions intentionally submitted to this
+project are
 licensed under Apache-2.0 as described by section 5 of `LICENSE`.

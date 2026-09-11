@@ -51,6 +51,16 @@ jobs:
       - name: Verify module
         shell: bash
         run: |
+          missing=0
+          while IFS= read -r file; do
+            if [[ "$(head -n 1 "$file")" != "// Copyright 2026 Ayesh Almeida" ]]; then
+              echo "Missing copyright header: $file" >&2
+              missing=1
+            fi
+          done < <(git ls-files '*.go')
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
           test -z "$(gofmt -l .)"
           go mod tidy
           git diff --exit-code -- go.mod go.sum
