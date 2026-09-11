@@ -131,6 +131,27 @@ Keep third-party actions pinned to full commit SHAs and workflow permissions at
 least privilege. Do not create repositories, tags, releases, commits, pushes, or
 remote settings unless the user explicitly authorizes those external changes.
 
+## Current handoff state (2026-09-11)
+
+- Version `v0.1.0` is published from commit `bc3d54f`; the release preparation,
+  release-PR CI, main-branch CI, and publication workflows all completed
+  successfully.
+- Both release workflows prefer `RELEASE_PLEASE_TOKEN` when configured and fall
+  back to `github.token`. No release PAT is currently configured. Repository
+  Actions permissions retain read-only defaults while allowing workflows to
+  create release pull requests, matching `lib-websubhub`.
+- There are no open pull requests. The `v1` issue label groups the proposed,
+  intentionally unprioritized stable-release backlog in issue #18. Individual
+  work items are issues #7 through #17.
+- Issue #7 records a known lifecycle gap: `RingBuffer.Close` wakes producer
+  capacity waits, but consumer barriers and processors do not yet reliably
+  observe ring closure. Treat it as correctness work, not merely API polish.
+- The proposed v1 boundary remains in-process and standard-library-only. The v1
+  tracker explicitly excludes a topology DSL, worker pool, persistence, CPU
+  affinity, cross-process transport, cgo, `unsafe`, and channel substitution.
+- The next planning step is maintainer review and prioritization of issue #18.
+  Do not assume every v1-labeled issue has been approved for implementation.
+
 ## Performance work
 
 Use the existing benchmark and load tools rather than one-off programs:
