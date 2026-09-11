@@ -17,11 +17,11 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `sequence.go`: padded atomic sequence and minimum-sequence helpers.
 - `sequencer.go`: shared sequencer contract, gates, close, and capacity waiting.
 - `sequencer_single.go`: single-producer claim/publish path.
-- `processor_error.go`: sequence-aware handler error and panic contracts.
 - `sequencer_multi.go`: CAS claims and per-slot publication availability.
 - `barrier.go`: consumer dependency barriers and gap-aware visibility.
 - `wait_strategy.go`: blocking, sleeping, yielding, and busy-spin waits.
 - `processor.go`: ordered batch consumer lifecycle and acknowledgement.
+- `processor_error.go`: sequence-aware handler error and panic contracts.
 - `errors.go`: exported sentinel errors.
 - `examples/basic`: minimal end-to-end usage.
 - `cmd/loadtest`: configurable concurrent throughput/latency runner.
@@ -128,6 +128,9 @@ A maintainer manually runs the Prepare Release workflow to create or update a
 reviewable version and changelog pull request. Preparation must fail while an
 earlier merged release PR remains `autorelease: pending`.
 
+Release workflows prefer `RELEASE_PLEASE_TOKEN` when configured and otherwise
+use `github.token`; a separate release PAT is not required for the normal path.
+
 After the release PR is reviewed and merged, a maintainer runs the Publish
 Release workflow through the protected `release` environment. Publication
 validates the prepared version, changelog, module graph, formatting, tests, race
@@ -141,21 +144,10 @@ remote settings unless the user explicitly authorizes those external changes.
 
 ## Current handoff state (2026-09-11)
 
-- Version `v0.1.0` is published from commit `bc3d54f`; the release preparation,
-  release-PR CI, main-branch CI, and publication workflows all completed
-  successfully.
-- Both release workflows prefer `RELEASE_PLEASE_TOKEN` when configured and fall
-  back to `github.token`. No release PAT is currently configured. Repository
-  Actions permissions retain read-only defaults while allowing workflows to
-  create release pull requests, matching `lib-websubhub`.
-- There are no open pull requests. The `v1` issue label groups the proposed,
-  intentionally unprioritized stable-release backlog in issue #18. Individual
-  work items are issues #7 through #17.
-- The proposed v1 boundary remains in-process and standard-library-only. The v1
-  tracker explicitly excludes a topology DSL, worker pool, persistence, CPU
-  affinity, cross-process transport, cgo, `unsafe`, and channel substitution.
-- Issues #7 and #8 establish close and drain behavior. Issue #11 establishes the
-  processor failure, panic, halt, and restart contracts; continue with #12.
+- `v0.1.0` is the current published release. The proposed v1 backlog is tracked
+  by issue #18.
+- Protocol/lifecycle issues #7, #8, and #11 are complete. The next approved item
+  in that group is #12, configurable producer capacity waiting.
 
 ## Performance work
 
