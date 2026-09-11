@@ -73,6 +73,9 @@ Prefer Go's typed atomics and documented synchronization semantics.
   timers, logging, and hidden heap escapes inside per-event loops unless measured.
 - Use `gofmt`; keep files focused and tests in package `disruptor` when they need
   to validate internal protocol behavior.
+- Every Go source file, including tests, examples, benchmarks, and commands, must
+  begin with the Apache-2.0 header used by this repository: `Copyright 2026
+  Ayesh Almeida`.
 - Do not silently broaden v0.1 scope into a topology DSL, worker pool, persistence,
   CPU affinity, cross-process transport, or architecture-specific padding.
 

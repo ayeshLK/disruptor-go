@@ -190,4 +190,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for validation and release conventions,
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Copyright 2026 Ayesh Almeida. Licensed under the Apache License, Version 2.0.
+See [LICENSE](LICENSE).
