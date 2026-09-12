@@ -1,22 +1,39 @@
 # lib-disruptor
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/ayeshLK/lib-disruptor.svg)](https://pkg.go.dev/github.com/ayeshLK/lib-disruptor)
-[![Release](https://img.shields.io/github/v/release/ayeshLK/lib-disruptor)](https://github.com/ayeshLK/lib-disruptor/releases/latest)
-[![CI](https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml/badge.svg)](https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/ayeshLK/lib-disruptor/branch/main/graph/badge.svg)](https://codecov.io/gh/ayeshLK/lib-disruptor)
-[![License](https://img.shields.io/github/license/ayeshLK/lib-disruptor)](LICENSE)
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/ayeshLK/lib-disruptor"><img src="https://pkg.go.dev/badge/github.com/ayeshLK/lib-disruptor.svg" alt="Go Reference"></a>
+  <a href="https://github.com/ayeshLK/lib-disruptor/releases/latest"><img src="https://img.shields.io/github/v/release/ayeshLK/lib-disruptor" alt="Release"></a>
+  <a href="https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml"><img src="https://github.com/ayeshLK/lib-disruptor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/ayeshLK/lib-disruptor"><img src="https://codecov.io/gh/ayeshLK/lib-disruptor/branch/main/graph/badge.svg" alt="codecov"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ayeshLK/lib-disruptor" alt="Apache-2.0 license"></a>
+</p>
 
-A generic, standard-library-only Go implementation of the core LMAX Disruptor
-protocol: reusable preallocated events, monotonic sequences, bounded
-backpressure, consumer barriers, publication-gap detection, and batch handling.
+> A generic, dependency-free Go implementation of the core LMAX Disruptor
+> protocol for bounded, ordered event pipelines.
 
-This is an independent Go implementation. It does not bind to the Java library,
-wrap a channel, use cgo, or use `unsafe`. Version `0.1.0` requires Go 1.25 or
-newer and may change before a stable release.
+`lib-disruptor` uses a reusable, preallocated ring buffer to coordinate
+producers and ordered batch consumers. It gives applications explicit
+backpressure and topology control without cgo, `unsafe`, Java bindings, or a
+channel-backed substitute.
+
+> [!IMPORTANT]
+> `lib-disruptor` is a pre-v1 module. Minor releases may include breaking
+> changes; review the [changelog](CHANGELOG.md) before upgrading.
+
+## Why use it?
+
+- Reuse factory-allocated events instead of allocating on every handoff.
+- Choose single-producer or CAS-based multi-producer publication.
+- Build broadcast and staged consumer pipelines with explicit gating.
+- Select consumer and producer waiting policies for your latency and CPU budget.
+
+This library is for in-process, performance-sensitive event processing. It is
+not a distributed queue, persistence layer, topology DSL, or general
+replacement for Go channels.
 
 ## Install
 
-Install the current release explicitly so builds remain reproducible:
+Requires Go 1.25 or newer.
 
 ```sh
 go get github.com/ayeshLK/lib-disruptor@v0.1.0
@@ -28,10 +45,10 @@ Import the root package as `disruptor`:
 import disruptor "github.com/ayeshLK/lib-disruptor"
 ```
 
-Because this is a pre-v1 module, review the [changelog](CHANGELOG.md) before
-upgrading to a new minor version.
-
 ## Quick start
+
+The basic lifecycle is: create a ring, attach and gate a processor, publish
+events, then drain and close the ring.
 
 ```go
 ring, err := disruptor.New(
@@ -65,206 +82,58 @@ return ring.Publish(context.Background(), func(event *OrderEvent, _ int64) error
 })
 ```
 
-See [`examples/basic`](examples/basic) for the complete lifecycle.
+See [`examples/basic`](examples/basic) for a complete, runnable example with
+orderly shutdown and processor-result handling.
 
-## Lower-level claims
+## Choose your setup
 
-```go
-high, err := ring.NextN(ctx, 4)
-if err != nil {
-    return err
-}
-low := high - 3
-for sequence := low; sequence <= high; sequence++ {
-    ring.Get(sequence).OrderID = nextOrderID()
-}
-ring.PublishRange(low, high)
-```
+### Producer mode
 
-`TryNext`, `TryNextN`, and `TryPublish` return immediately with
-`ErrInsufficientCapacity` instead of waiting for consumers.
-
-## Producer modes
-
-- `SingleProducer` avoids atomic claims. Exactly one goroutine may claim or
-  publish for the lifetime of the ring.
-- `MultiProducer` uses CAS claims and per-slot lap flags. Consumers stop at the
-  first unpublished gap even if later sequences have been published.
-
-Use `MultiProducer` whenever publisher calls can overlap.
-
-## Producer capacity waits
-
-Producer capacity waiting is configured independently from the consumer wait
-strategy passed to `New`. Yielding remains the default for compatibility:
-
-```go
-ring, err := disruptor.New(
-    1024,
-    disruptor.MultiProducer,
-    factory,
-    disruptor.BlockingWait(),
-    disruptor.WithProducerWait(disruptor.ProducerWaitBlocking),
-)
-```
-
-| Mode | Capacity behavior | Typical use |
+| Mode | Use when | Notes |
 |---|---|---|
-| `ProducerWaitYielding` | Yields to the Go scheduler | General-purpose default |
-| `ProducerWaitBlocking` | Sleeps until gates advance | Shared hosts and sustained backpressure |
-| `ProducerWaitBusySpin` | Continuously checks capacity | Dedicated cores and lowest handoff latency |
+| `SingleProducer` | One goroutine will claim and publish for the ring's lifetime | Lowest claim overhead; do not call publishing APIs from another goroutine. |
+| `MultiProducer` | Publisher calls may overlap | Uses CAS claims and preserves ordered consumer visibility across publication gaps. |
 
-Blocking producer waits are notified by `Sequence.Store`, `Sequence.Add`, a
-successful `Sequence.CompareAndSwap`, gate removal, shutdown, and close. Spurious
-wakeups only recheck capacity. `TryNext`, `TryNextN`, and `TryPublish` remain
-non-blocking and do not use this policy.
+### Consumer wait strategy
 
-## Consumer graphs
+| Strategy | Best fit |
+|---|---|
+| `BlockingWait()` | Shared hosts and low CPU use |
+| `SleepingWait()` | A balance of CPU use and latency |
+| `YieldingWait()` | Busy systems with spare cores |
+| `BusySpinWait()` | Dedicated cores and lowest jitter |
 
-Parallel broadcast:
+The consumer wait strategy is passed to `New`. Producer capacity waiting is
+configured separately with `WithProducerWait`; see the
+[usage guide](docs/usage.md#producer-capacity-waits).
 
-```go
-a, _ := disruptor.NewBatchProcessor(ring, ring.NewBarrier(), handlerA)
-b, _ := disruptor.NewBatchProcessor(ring, ring.NewBarrier(), handlerB)
-ring.AddGatingSequences(a.Sequence(), b.Sequence())
-```
+## Model your consumer graph
 
-Pipeline `A → B`:
+| Topology | Barrier and gate arrangement |
+|---|---|
+| Broadcast | `producer -> A` and `producer -> B`; gate both `A` and `B`. |
+| Pipeline | `producer -> A -> B`; create `B`'s barrier from `A.Sequence()` and gate only terminal consumer `B`. |
 
-```go
-a, _ := disruptor.NewBatchProcessor(ring, ring.NewBarrier(), handlerA)
-b, _ := disruptor.NewBatchProcessor(ring, ring.NewBarrier(a.Sequence()), handlerB)
-ring.AddGatingSequences(b.Sequence())
-```
+Gating sequences prevent a producer from overwriting an event before the
+terminal consumers have acknowledged it. Assemble a topology before publishing;
+a gate added later starts at the current claim cursor and does not replay old
+events.
 
-Only terminal consumers should gate reuse. B cannot pass A, so gating on B
-protects both pipeline stages.
+## Next steps
 
-## Wait strategies
+- Read the [usage guide](docs/usage.md) for batch claims, producer capacity
+  waits, graph setup, shutdown, error handling, and event-ownership rules.
+- Browse the [API reference](https://pkg.go.dev/github.com/ayeshLK/lib-disruptor)
+  for the complete public contract.
+- See [PERFORMANCE.md](PERFORMANCE.md) for the measurement model and
+  [BENCHMARKS.md](BENCHMARKS.md) for dated, machine-specific results.
 
-| Strategy | Behavior | Typical use |
-|---|---|---|
-| `BlockingWait()` | Sleep until publication | Default/shared hosts |
-| `SleepingWait()` | Spin, yield, then sleep | Balanced CPU and latency |
-| `YieldingWait()` | Yield while waiting | Busy systems with spare cores |
-| `BusySpinWait()` | Continuously check | Dedicated cores, lowest jitter |
+## Contributing and security
 
-Wait strategies govern consumers; producer capacity waits use the independently
-configured policy above.
-
-## Graceful shutdown
-
-Stop and join publisher goroutines before calling `Shutdown`. It rejects future
-claims, captures the final claimed sequence, waits for the gating sequences
-registered at that point, and then closes consumer waits. Because only terminal
-consumers should gate the ring, the same operation drains broadcast and pipeline
-topologies.
-
-`Shutdown` always closes the ring before returning. A context error means the
-drain was interrupted; inspect processor results separately for handler failures.
-Use `Close` when consumers should stop immediately without draining.
-
-## Processor supervision
-
-Treat the value returned by `BatchProcessor.Run` as the processor supervision
-path. The processor does not log failures or invoke a second error callback, so
-applications can apply their own retry, shutdown, and reporting policy exactly
-once.
-
-A returned handler error is wrapped in `HandlerError`, which exposes the failing
-sequence and supports `errors.Is` and `errors.As`. A handler panic is recovered
-and returned as `HandlerPanicError`; if its value implements `error`, it also
-participates in `errors.Is` and `errors.As`. Either failure leaves the selected
-batch unacknowledged and replayable.
-
-`Halt` is harmless while idle. During a run it wakes the processor, lets the
-currently selected batch finish, and returns `nil`; `Running` remains true until
-that run has returned. A processor may be restarted after a halt, context
-cancellation, external barrier alert, handler error, or recovered panic. A closed
-ring is terminal, so subsequent runs return `ErrClosed`.
-## Ownership and safety
-
-
-- Events are created once by `EventFactory` and reused.
-- A producer owns a claimed event until publication.
-- Consumers may access an event only while handling its sequence.
-- Never retain an event after the consumer sequence advances.
-- Downstream handlers may observe mutations made by upstream handlers.
-- Handler errors leave the current batch unacknowledged. Restarting that
-  processor replays the batch, so restartable handlers should be idempotent.
-- Build and test applications with the race detector.
-- `Close` unblocks unavailable consumer waits with `ErrClosed`; `Shutdown`
-  drains registered terminal gates before producing the same terminal signal.
-
-Go atomic publication and observation establish the visibility order. Go
-atomics are sequentially consistent.
-
-## Validation
-
-```bash
-go test ./...
-go test -race ./...
-go vet ./...
-go run ./examples/basic
-```
-
-The microbenchmark matrix covers raw and batched publication, SPSC and MPSC,
-broadcast and pipeline topologies, wait policies, reusable payload sizes, and
-equivalently buffered channel baselines:
-
-```bash
-go test -run='^$' -bench=. -benchmem -benchtime=1s -count=10
-```
-
-Run throughput and latency separately so clock sampling does not distort the
-throughput result:
-
-```bash
-go run ./cmd/loadtest \
-  -mode=throughput \
-  -events=1000000 \
-  -warmup-events=100000 \
-  -repetitions=5 \
-  -producers=1 \
-  -consumers=1 \
-  -topology=broadcast \
-  -ring-size=65536 \
-  -batch-size=256 \
-  -payload-size=256 \
-  -producer-wait=yielding \
-  -consumer-wait=yielding
-
-go run ./cmd/loadtest \
-  -mode=latency \
-  -events=1000000 \
-  -warmup-events=100000 \
-  -repetitions=5 \
-  -sample-every=100
-```
-
-The versioned JSON separates publication and final-drain throughput and reports
-runtime allocation/GC deltas. Latency mode additionally reports sampled
-p50/p95/p99/p99.9/max latency. See [PERFORMANCE.md](PERFORMANCE.md) for the
-canonical matrix and regression policy.
-
-## Design notes
-
-- Sequences start at `-1`.
-- Physical index is `uint64(sequence) & uint64(bufferSize-1)`.
-- A multi-producer availability flag is the sequence's lap number.
-- Gating lists use copy-on-write atomic snapshots.
-- `Sequence` pads `atomic.Int64` without architecture-specific `unsafe` logic.
-- Assemble topology before publishing. A newly added runtime gate starts at the
-  current claim cursor and does not replay older events.
-
-Deferred from v0.1: fluent topology DSL, worker pools, replaying dynamic graph
-changes, CPU affinity, `unsafe` padding, persistence, and cross-process delivery.
-
-## Project policies
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for validation and release conventions,
-[SECURITY.md](SECURITY.md) for private vulnerability reporting, and
-[BENCHMARKS.md](BENCHMARKS.md) for dated local performance measurements.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development and validation workflow, [SECURITY.md](SECURITY.md) for private
+vulnerability reporting, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for
+community expectations.
 
 ## License
 
