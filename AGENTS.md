@@ -165,6 +165,12 @@ remote settings unless the user explicitly authorizes those external changes.
   GitHub repository description is: “A generic, dependency-free Go
   implementation of the LMAX Disruptor protocol for bounded, ordered event
   pipelines.” Topics remain unchanged and the homepage is intentionally unset.
+- Commit `c814fc7` (`docs: refresh handoff context`) recorded that documentation
+  and repository-metadata update in this handoff section. Both recent
+  documentation commits were pushed directly to `main` with explicit user
+  authorization; GitHub reported that the pull-request rule and six expected
+  status checks were bypassed. Preserve the normal pull-request workflow unless
+  a maintainer explicitly authorizes another direct push.
 - The 2026-09-12 v1 baseline is complete on an Intel i7-10510U with Go 1.26.2,
   GOMAXPROCS 8, and the `powersave` governor. It includes ten microbenchmark
   samples, five repetitions of each throughput/payload scenario, separate
