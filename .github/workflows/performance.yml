@@ -1,0 +1,86 @@
+name: Performance evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchtime:
+        description: Go benchmark duration per sample
+        required: true
+        default: 1s
+        type: string
+      benchmark_count:
+        description: Repeated benchmark samples
+        required: true
+        default: "5"
+        type: string
+      load_events:
+        description: Measured events per load repetition
+        required: true
+        default: "1000000"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    name: Informational performance evidence
+    runs-on: ubuntu-latest
+    env:
+      BENCHTIME: ${{ inputs.benchtime }}
+      BENCHMARK_COUNT: ${{ inputs.benchmark_count }}
+      LOAD_EVENTS: ${{ inputs.load_events }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.x
+          check-latest: true
+          cache: false
+      - name: Record environment
+        shell: bash
+        run: |
+          mkdir -p perf-results
+          go version > perf-results/environment.txt
+          go env -json GOOS GOARCH GOAMD64 > perf-results/go-env.json
+          uname -a >> perf-results/environment.txt
+          lscpu >> perf-results/environment.txt
+          if [[ -r /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
+            sed 's/^/cpu_governor=/' /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor >> perf-results/environment.txt
+          fi
+          git rev-parse HEAD >> perf-results/environment.txt
+      - name: Run microbenchmark matrix
+        shell: bash
+        run: |
+          go test -run='^$' -bench=. -benchmem -benchtime="$BENCHTIME" -count="$BENCHMARK_COUNT" | tee perf-results/benchmarks.txt
+      - name: Build load runner
+        shell: bash
+        run: go build -o "$RUNNER_TEMP/loadtest" ./cmd/loadtest
+      - name: Run canonical throughput scenarios
+        shell: bash
+        run: |
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=1 -consumers=1 -topology=broadcast -environment=github-hosted > perf-results/load-spsc.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=4 -consumers=1 -topology=broadcast -environment=github-hosted > perf-results/load-mpsc-4.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=1 -consumers=2 -topology=broadcast -environment=github-hosted > perf-results/load-broadcast-2.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=1 -consumers=2 -topology=pipeline -environment=github-hosted > perf-results/load-pipeline-2.json
+      - name: Run payload and latency scenarios
+        shell: bash
+        run: |
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=1 -consumers=1 -payload-size=256 -environment=github-hosted > perf-results/load-payload-256.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=1 -consumers=1 -payload-size=4096 -environment=github-hosted > perf-results/load-payload-4096.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=4 -consumers=1 -payload-size=256 -environment=github-hosted > perf-results/load-mpsc-4-payload-256.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=throughput -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -producers=4 -consumers=1 -payload-size=4096 -environment=github-hosted > perf-results/load-mpsc-4-payload-4096.json
+          /usr/bin/time -v -a -o perf-results/resources.txt "$RUNNER_TEMP/loadtest" -mode=latency -events="$LOAD_EVENTS" -warmup-events=100000 -repetitions=3 -sample-every=100 -environment=github-hosted > perf-results/load-latency.json
+      - name: Upload raw evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: performance-${{ github.run_id }}
+          path: perf-results
+          if-no-files-found: error
+          retention-days: 30

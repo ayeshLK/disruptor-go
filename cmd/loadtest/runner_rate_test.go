@@ -15,21 +15,15 @@
 package main
 
 import (
-	"fmt"
-	"os"
+	"testing"
 	"time"
 )
 
-type loadEvent struct {
-	Value       int64
-	PublishedAt time.Time
-	Sampled     bool
-	Payload     []byte
-}
-
-func main() { runMain() }
-
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
+func TestPerSecondHandlesClockResolution(t *testing.T) {
+	if got := perSecond(100, 0); got != 0 {
+		t.Fatalf("zero duration rate: got %v", got)
+	}
+	if got := perSecond(100, time.Second); got != 100 {
+		t.Fatalf("one-second rate: got %v", got)
+	}
 }
