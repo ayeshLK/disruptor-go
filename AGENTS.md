@@ -152,16 +152,32 @@ remote settings unless the user explicitly authorizes those external changes.
 
 - `v0.1.0` is the current published release. The proposed v1 backlog is tracked
   by issue #18.
-- Protocol/lifecycle issues #7, #8, #11, and #12 are complete. Performance work
-  for issue #15 includes a versioned load report, canonical benchmark matrix,
-  payload sensitivity coverage, and an informational artifact workflow.
+- PR #23 is merged on `main` at commit
+  `b3a4c3d6225ca3f7fc000f10503a927e16f3eb19`. It provides the versioned load
+  report, canonical benchmark matrix, payload sensitivity coverage, performance
+  strategy, and informational artifact workflow for issue #15.
+- The active local branch is `perf/update-v1-baseline`. Worktree changes are the
+  `BENCHMARKS.md` baseline and this `AGENTS.md` handoff update; neither has been
+  committed or pushed.
+- The 2026-09-12 v1 baseline is complete on an Intel i7-10510U with Go 1.26.2,
+  GOMAXPROCS 8, and the `powersave` governor. It includes ten microbenchmark
+  samples, five repetitions of each throughput/payload scenario, separate
+  10,000-sample latency runs, allocation deltas, and GNU `time -v` resource
+  evidence. The full report and notation legend are in `BENCHMARKS.md`.
+- MPSC results on this shared desktop host are strongly bimodal and include
+  scheduler-sensitive 50–100 ms latency stalls. Preserve every sample and do
+  not turn this local baseline into a release threshold. A controlled runner
+  and variance study remain necessary before enabling timing gates.
+- After the documentation update, `go test ./...`, `go test -race ./...`,
+  `go vet ./...`, and `git diff --check` passed. Raw JSON, GNU time output, and
+  the temporary load-test binary were kept out of the repository.
 
 ## Performance work
 
 Use the existing benchmark and load tools rather than one-off programs:
 
 ```bash
-go test -run='^$' -bench=. -benchmem -benchtime=500ms -count=3
+go test -run='^$' -bench=. -benchmem -benchtime=1s -count=10
 go run ./cmd/loadtest -mode=throughput -events=1000000 -warmup-events=100000 \
   -repetitions=5 -producers=1 -consumers=1 -ring-size=65536 -batch-size=256
 ```
