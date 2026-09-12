@@ -27,6 +27,8 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `examples/basic`: minimal end-to-end usage.
 - `cmd/loadtest`: configurable concurrent throughput/latency runner.
 - `benchmark_test.go`: microbenchmarks and buffered-channel baseline.
+- `benchmark_matrix_test.go`: canonical topology, wait, batching, and payload matrix.
+- `PERFORMANCE.md`: measurement model, canonical matrix, and regression policy.
 - `BENCHMARKS.md`: dated, machine-specific baseline results.
 
 ## Correctness invariants
@@ -150,8 +152,9 @@ remote settings unless the user explicitly authorizes those external changes.
 
 - `v0.1.0` is the current published release. The proposed v1 backlog is tracked
   by issue #18.
-- Protocol/lifecycle issues #7, #8, #11, and #12 are complete. Await manual
-  prioritization of the remaining v1 tracker items.
+- Protocol/lifecycle issues #7, #8, #11, and #12 are complete. Performance work
+  for issue #15 includes a versioned load report, canonical benchmark matrix,
+  payload sensitivity coverage, and an informational artifact workflow.
 
 ## Performance work
 
@@ -159,8 +162,8 @@ Use the existing benchmark and load tools rather than one-off programs:
 
 ```bash
 go test -run='^$' -bench=. -benchmem -benchtime=500ms -count=3
-go run ./cmd/loadtest -events=1000000 -producers=1 -consumers=1 \
-  -ring-size=65536 -batch-size=256
+go run ./cmd/loadtest -mode=throughput -events=1000000 -warmup-events=100000 \
+  -repetitions=5 -producers=1 -consumers=1 -ring-size=65536 -batch-size=256
 ```
 
 For comparisons, keep Go version, `GOMAXPROCS`, machine load, CPU governor, ring
@@ -168,6 +171,13 @@ size, batching, topology, and sampling flags fixed. Report all samples and
 allocations, not only the best result. Compare against the buffered-channel
 baseline where appropriate. Do not present laptop or powersave-mode measurements
 as portable guarantees or hard release thresholds.
+
+Keep throughput and sampled-latency load runs separate. Payload cases must touch
+all reported bytes, reuse factory-allocated storage, and report event size, ring
+size, approximate working set, events/s, and payload MiB/s. Add every new unit,
+abbreviation, percentile, and topology notation to the legend in
+`BENCHMARKS.md`. Shared hosted-runner timings are informational; timing gates
+require a controlled runner and a documented variance study.
 
 If updating `BENCHMARKS.md`, record the date, CPU/OS, Go version, `GOMAXPROCS`,
 exact commands and flags, repeated results, latency sampling rate, and notable

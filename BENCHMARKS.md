@@ -3,6 +3,35 @@
 Measured on 2026-09-11. These are local development numbers, not portable
 performance guarantees.
 
+## Notation legend
+
+| Notation | Meaning |
+|---|---|
+| SPSC | One producer and one consumer |
+| MPSC | Multiple producers and one consumer |
+| broadcast-N | Every event is delivered independently to N consumers |
+| pipeline-N | Every event passes through N ordered consumer stages |
+| B, KiB, MiB | Bytes, 1,024 bytes, and 1,048,576 bytes respectively |
+| ns, μs, ns/op, μs/op | Nanoseconds, microseconds, or either unit per benchmark operation |
+| events/s, Published/s | Source events completed or published per second |
+| K, M | Decimal thousand and million suffixes in summarized rates |
+| deliveries/s | Handler invocations completed per second across all consumers or stages |
+| payload MiB/s | Logical source payload bytes completed per second; not aggregate memory traffic or internal copying |
+| B/op, allocs/op | Heap bytes and heap allocations per benchmark operation |
+| p50, p95, p99, p99.9 | Nearest-rank latency percentiles |
+| max | Largest sampled latency |
+| GOMAXPROCS | Maximum number of CPUs executing Go code simultaneously |
+| working set | Ring size multiplied by reusable payload size, excluding event metadata |
+
+See `PERFORMANCE.md` for the canonical matrix, measurement separation, and
+regression policy. Add every new abbreviation, unit, percentile label, or
+throughput term to this legend when it first appears.
+
+The results below predate load-report schema version 1. Their
+`Published events/s` values include the final consumer drain and therefore
+correspond to the new `end_to_end_events_per_second` field, not the separately
+measured publication rate.
+
 ## Environment
 
 - CPU: Intel Core i7-10510U, 4 cores / 8 threads

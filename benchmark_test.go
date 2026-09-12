@@ -17,7 +17,6 @@ package disruptor
 import (
 	"context"
 	"runtime"
-	"sync/atomic"
 	"testing"
 )
 
@@ -60,11 +59,10 @@ func BenchmarkSPSC(b *testing.B) {
 
 func BenchmarkBufferedChannelSPSC(b *testing.B) {
 	channel := make(chan int64, 65536)
-	var consumed atomic.Int64
 	done := make(chan struct{})
 	go func() {
 		for value := range channel {
-			consumed.Store(value)
+			runtime.KeepAlive(value)
 		}
 		close(done)
 	}()
@@ -73,22 +71,22 @@ func BenchmarkBufferedChannelSPSC(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		channel <- int64(i)
 	}
-	for consumed.Load() < int64(b.N-1) {
-		runtime.Gosched()
-	}
-	b.StopTimer()
 	close(channel)
 	<-done
+	b.StopTimer()
 }
 
 func BenchmarkProducerWaitUnderSlowGate(b *testing.B) {
-	for name, mode := range map[string]ProducerWaitMode{
-		"yielding":  ProducerWaitYielding,
-		"blocking":  ProducerWaitBlocking,
-		"busy-spin": ProducerWaitBusySpin,
+	for _, policy := range []struct {
+		name string
+		mode ProducerWaitMode
+	}{
+		{name: "yielding", mode: ProducerWaitYielding},
+		{name: "blocking", mode: ProducerWaitBlocking},
+		{name: "busy-spin", mode: ProducerWaitBusySpin},
 	} {
-		b.Run(name, func(b *testing.B) {
-			ring, _ := New(1, SingleProducer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait(), WithProducerWait(mode))
+		b.Run(policy.name, func(b *testing.B) {
+			ring, _ := New(1, SingleProducer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait(), WithProducerWait(policy.mode))
 			gate := NewSequence(InitialSequence)
 			ring.AddGatingSequences(gate)
 			barrier := ring.NewBarrier()

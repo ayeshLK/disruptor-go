@@ -208,26 +208,44 @@ go vet ./...
 go run ./examples/basic
 ```
 
-Microbenchmarks include an equivalent buffered-channel SPSC baseline:
+The microbenchmark matrix covers raw and batched publication, SPSC and MPSC,
+broadcast and pipeline topologies, wait policies, reusable payload sizes, and
+equivalently buffered channel baselines:
 
 ```bash
-go test -run='^$' -bench=. -benchmem ./...
+go test -run='^$' -bench=. -benchmem -benchtime=1s -count=10
 ```
 
-Run concurrent load with sampled latency:
+Run throughput and latency separately so clock sampling does not distort the
+throughput result:
 
 ```bash
 go run ./cmd/loadtest \
+  -mode=throughput \
   -events=1000000 \
+  -warmup-events=100000 \
+  -repetitions=5 \
   -producers=1 \
   -consumers=1 \
+  -topology=broadcast \
   -ring-size=65536 \
   -batch-size=256 \
-  -producer-wait=yielding
+  -payload-size=256 \
+  -producer-wait=yielding \
+  -consumer-wait=yielding
+
+go run ./cmd/loadtest \
+  -mode=latency \
+  -events=1000000 \
+  -warmup-events=100000 \
+  -repetitions=5 \
+  -sample-every=100
 ```
 
-The load command prints JSON with publication and delivery throughput plus
-sampled p50/p95/p99 end-to-end latency.
+The versioned JSON separates publication and final-drain throughput and reports
+runtime allocation/GC deltas. Latency mode additionally reports sampled
+p50/p95/p99/p99.9/max latency. See [PERFORMANCE.md](PERFORMANCE.md) for the
+canonical matrix and regression policy.
 
 ## Design notes
 
