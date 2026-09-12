@@ -266,8 +266,8 @@ func runOnce(cfg config, run int) (runReport, error) {
 		ProducerWait: cfg.producerWait, ConsumerWait: cfg.consumerWait, PayloadSizeBytes: cfg.payloadSize,
 		PayloadWorkingSetBytes: cfg.ringSize * int64(cfg.payloadSize), HandlerDelayNS: cfg.handlerDelay.Nanoseconds(),
 		PublishSeconds: publishDuration.Seconds(), DrainSeconds: drainDuration.Seconds(), EndToEndSeconds: endToEndDuration.Seconds(),
-		PublishedPerSecond: float64(cfg.events) / publishDuration.Seconds(), EndToEndPerSecond: float64(cfg.events) / endToEndDuration.Seconds(),
-		DeliveriesPerSecond: float64(deliveries) / endToEndDuration.Seconds(), AllocationBytes: memoryAfter.TotalAlloc - memoryBefore.TotalAlloc,
+		PublishedPerSecond: perSecond(cfg.events, publishDuration), EndToEndPerSecond: perSecond(cfg.events, endToEndDuration),
+		DeliveriesPerSecond: perSecond(deliveries, endToEndDuration), AllocationBytes: memoryAfter.TotalAlloc - memoryBefore.TotalAlloc,
 		Allocations: memoryAfter.Mallocs - memoryBefore.Mallocs, GCCount: memoryAfter.NumGC - memoryBefore.NumGC,
 		LatencySamples: len(latencies), Checksum: sumChecksums(processors.checksums),
 	}
@@ -275,7 +275,7 @@ func runOnce(cfg config, run int) (runReport, error) {
 		result.SampleEvery = cfg.sampleEvery
 	}
 	if cfg.payloadSize > 0 {
-		result.PayloadMiBPerSecond = float64(cfg.events*int64(cfg.payloadSize)) / (1024 * 1024) / endToEndDuration.Seconds()
+		result.PayloadMiBPerSecond = perSecond(cfg.events*int64(cfg.payloadSize), endToEndDuration) / (1024 * 1024)
 	}
 	if len(latencies) > 0 {
 		result.LatencyP50NS = percentile(latencies, 0.50)
@@ -464,6 +464,13 @@ func sumChecksums(values []uint64) uint64 {
 		sum += value
 	}
 	return sum
+}
+
+func perSecond(count int64, duration time.Duration) float64 {
+	if duration <= 0 {
+		return 0
+	}
+	return float64(count) / duration.Seconds()
 }
 
 func buildRevision() (string, bool) {
