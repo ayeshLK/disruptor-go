@@ -156,9 +156,15 @@ remote settings unless the user explicitly authorizes those external changes.
   `b3a4c3d6225ca3f7fc000f10503a927e16f3eb19`. It provides the versioned load
   report, canonical benchmark matrix, payload sensitivity coverage, performance
   strategy, and informational artifact workflow for issue #15.
-- The active local branch is `perf/update-v1-baseline`. Worktree changes are the
-  `BENCHMARKS.md` baseline and this `AGENTS.md` handoff update; neither has been
-  committed or pushed.
+- PR #24 subsequently recorded that v1 baseline on `main` at commit
+  `42721e7`. The performance-report worktree changes described above are no
+  longer pending.
+- `main` includes commit `5da5b43` (`docs: streamline project onboarding`),
+  which reorganizes the README around adoption, adds `docs/usage.md` for the
+  advanced protocol contract, and links the two paths together. The public
+  GitHub repository description is: “A generic, dependency-free Go
+  implementation of the LMAX Disruptor protocol for bounded, ordered event
+  pipelines.” Topics remain unchanged and the homepage is intentionally unset.
 - The 2026-09-12 v1 baseline is complete on an Intel i7-10510U with Go 1.26.2,
   GOMAXPROCS 8, and the `powersave` governor. It includes ten microbenchmark
   samples, five repetitions of each throughput/payload scenario, separate
@@ -168,9 +174,10 @@ remote settings unless the user explicitly authorizes those external changes.
   scheduler-sensitive 50–100 ms latency stalls. Preserve every sample and do
   not turn this local baseline into a release threshold. A controlled runner
   and variance study remain necessary before enabling timing gates.
-- After the documentation update, `go test ./...`, `go test -race ./...`,
-  `go vet ./...`, and `git diff --check` passed. Raw JSON, GNU time output, and
-  the temporary load-test binary were kept out of the repository.
+- The baseline update and the later documentation refresh were validated with
+  `go test ./...`, `go test -race ./...`, `go vet ./...`, and `git diff --check`;
+  the refresh also ran `go run ./examples/basic`. Raw JSON, GNU time output,
+  and the temporary load-test binary were kept out of the repository.
 
 ## Performance work
 
