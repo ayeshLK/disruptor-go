@@ -25,7 +25,224 @@ See `PERFORMANCE.md` for the canonical matrix, measurement separation, and
 regression policy. Add every new abbreviation, unit, percentile label, or
 throughput term to this legend when it first appears.
 
-## Full v1 baseline — 2026-09-12
+## Full v1 refresh — 2026-09-12
+
+Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.
+The changes since the previous full run are documentation-only, so this is an
+environmental refresh rather than a code-performance comparison. These are
+local development results, not portable guarantees or release thresholds. The
+`powersave` governor and ordinary desktop activity make the wide MPSC
+distributions especially important to retain.
+
+### Environment
+
+- Time: `2026-09-12T18:09:42+05:30` (microbenchmark start); load runs began at `2026-09-12T18:19:40+05:30`
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- Cache: 128 KiB L1d, 1 MiB L2, and 8 MiB L3 (aggregate `lscpu` values)
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+- Initial load average: 1.25, 0.84, 0.37
+- Memory: 15 GiB total, 11 GiB available, no swap in use
+
+### Microbenchmarks
+
+```bash
+go test -run='^$' -bench=. -benchmem -benchtime=1s -count=10
+```
+
+The table summarizes all ten sequential samples as minimum / median / maximum.
+All cases measured 0 B/op and 0 allocs/op except the two blocking waits shown.
+All samples appear below, while the raw output remains outside the repository.
+Summary values alone must not be used for a statistical regression decision.
+
+| Area | Scenario | ns/op min / median / max | Allocations |
+|---|---|---:|---:|
+| Claim/publish | Single, batch 1 | 13.40 / 13.77 / 13.98 | 0 / 0 |
+| Claim/publish | Single, batch 16 | 1.700 / 1.773 / 1.823 | 0 / 0 |
+| Claim/publish | Single, batch 256 | 0.9408 / 0.9616 / 1.030 | 0 / 0 |
+| Claim/publish | Multi, batch 1 | 22.15 / 22.69 / 23.80 | 0 / 0 |
+| Claim/publish | Multi, batch 16 | 8.386 / 8.493 / 8.637 | 0 / 0 |
+| Claim/publish | Multi, batch 256 | 7.352 / 7.409 / 7.880 | 0 / 0 |
+| Try claim/publish | Single, batch 1 | 10.39 / 11.08 / 11.77 | 0 / 0 |
+| Try claim/publish | Single, batch 16 | 1.601 / 1.655 / 2.463 | 0 / 0 |
+| Try claim/publish | Single, batch 256 | 0.9152 / 0.9377 / 0.9966 | 0 / 0 |
+| Try claim/publish | Multi, batch 1 | 20.75 / 21.50 / 22.92 | 0 / 0 |
+| Try claim/publish | Multi, batch 16 | 8.036 / 8.429 / 10.01 | 0 / 0 |
+| Try claim/publish | Multi, batch 256 | 6.501 / 8.186 / 11.17 | 0 / 0 |
+| Publication gap | Multi-producer scan | 37.54 / 40.41 / 47.39 | 0 / 0 |
+| Topology | SPSC | 33.29 / 36.80 / 38.51 | 0 / 0 |
+| Topology | MPSC-2 | 98.28 / 103.9 / 114.7 | 0 / 0 |
+| Topology | MPSC-4 | 123.6 / 136.9 / 144.5 | 0 / 0 |
+| Topology | broadcast-2 | 29.88 / 32.76 / 41.04 | 0 / 0 |
+| Topology | pipeline-2 | 26.58 / 28.98 / 30.45 | 0 / 0 |
+| Consumer wait | Blocking | 168.4 / 172.0 / 179.5 | 112 B/op / 1 alloc/op |
+| Consumer wait | Sleeping | 43.07 / 46.26 / 48.18 | 0 / 0 |
+| Consumer wait | Yielding | 31.86 / 35.86 / 38.13 | 0 / 0 |
+| Consumer wait | Busy-spin | 41.52 / 44.99 / 48.66 | 0 / 0 |
+| Producer wait | Blocking | 34,098 / 35,810 / 36,015 | 112 B/op / 1 alloc/op |
+| Producer wait | Yielding | 2,181 / 2,286 / 2,294 | 0 / 0 |
+| Producer wait | Busy-spin | 640.4 / 648.0 / 672.0 | 0 / 0 |
+| Baseline | Buffered channel SPSC | 71.75 / 73.01 / 73.85 | 0 / 0 |
+| Baseline | Buffered channel MPSC | 93.09 / 106.1 / 116.9 | 0 / 0 |
+| Baseline | Buffered channel broadcast-2 | 97.48 / 100.6 / 105.6 | 0 / 0 |
+| Baseline | Buffered channel pipeline-2 | 95.17 / 99.19 / 122.7 | 0 / 0 |
+| Legacy | Raw publish | 12.48 / 13.10 / 14.21 | 0 / 0 |
+| Legacy | SPSC | 21.80 / 22.42 / 24.97 | 0 / 0 |
+
+Payload entries are preallocated for each of the payload benchmark's 1,024
+slots and fully touched by the producer and consumer. The 4 KiB referenced
+case measures external reusable storage separately from the inline case.
+
+| Scenario | ns/op min / median / max | payload MiB/s min / median / max | Working set |
+|---|---:|---:|---:|
+| SPSC inline 16 B | 39.21 / 40.52 / 43.81 | 348.3 / 376.6 / 389.1 | 16 KiB |
+| SPSC inline 256 B | 152.6 / 192.1 / 219.8 | 1,111 / 1,272 / 1,600 | 256 KiB |
+| SPSC inline 4 KiB | 2,129 / 2,556 / 3,144 | 1,243 / 1,529 / 1,835 | 4 MiB |
+| SPSC referenced 4 KiB | 2,315 / 2,419 / 2,715 | 1,439 / 1,616 / 1,687 | 4 MiB |
+| MPSC inline 16 B | 120.5 / 132.8 / 136.9 | 111.5 / 115.0 / 126.6 | 16 KiB |
+| MPSC inline 256 B | 254.6 / 260.2 / 384.3 | 635.3 / 938.4 / 959.0 | 256 KiB |
+| MPSC inline 4 KiB | 3,200 / 3,241 / 3,831 | 1,020 / 1,206 / 1,221 | 4 MiB |
+| MPSC referenced 4 KiB | 3,209 / 3,588 / 3,748 | 1,042 / 1,089 / 1,217 | 4 MiB |
+
+<details>
+<summary>All microbenchmark samples in execution order</summary>
+
+| Scenario | Ten ns/op samples | Ten payload MiB/s samples |
+|---|---|---|
+| Buffered channel broadcast-2 | 105.6, 97.48, 98.67, 102.7, 100.4, 98.53, 100.8, 105.6, 102.3, 99.19 | — |
+| Buffered channel pipeline-2 | 95.17, 98.15, 95.47, 98.94, 95.40, 99.44, 107.8, 119.1, 116.8, 122.7 | — |
+| Try claim/publish, single, batch 1 | 10.74, 10.66, 11.16, 11.77, 10.39, 11.37, 10.50, 11.06, 11.30, 11.09 | — |
+| Try claim/publish, single, batch 16 | 1.602, 1.721, 1.601, 1.621, 2.410, 2.463, 1.743, 1.651, 1.658, 1.647 | — |
+| Try claim/publish, single, batch 256 | 0.9258, 0.9966, 0.9858, 0.9340, 0.9879, 0.9359, 0.9394, 0.9722, 0.9152, 0.9288 | — |
+| Try claim/publish, multi, batch 1 | 22.45, 21.35, 22.92, 21.42, 21.20, 20.75, 21.58, 22.15, 21.20, 21.91 | — |
+| Try claim/publish, multi, batch 16 | 9.479, 9.577, 10.01, 8.586, 8.643, 8.052, 8.153, 8.272, 8.222, 8.036 | — |
+| Try claim/publish, multi, batch 256 | 7.067, 8.821, 11.17, 11.12, 8.237, 7.080, 6.501, 6.897, 9.285, 8.134 | — |
+| Multi-producer publication gap scan | 45.88, 44.65, 43.31, 41.55, 47.39, 39.05, 38.99, 39.26, 38.06, 37.54 | — |
+| Claim/publish, single, batch 1 | 13.75, 13.82, 13.52, 13.40, 13.55, 13.88, 13.83, 13.58, 13.78, 13.98 | — |
+| Claim/publish, single, batch 16 | 1.700, 1.823, 1.754, 1.813, 1.773, 1.773, 1.778, 1.714, 1.776, 1.765 | — |
+| Claim/publish, single, batch 256 | 0.9431, 0.9478, 0.9408, 0.9618, 0.9696, 0.9652, 0.9614, 0.9595, 1.030, 0.9649 | — |
+| Claim/publish, multi, batch 1 | 23.07, 22.28, 23.16, 22.15, 22.84, 22.53, 22.31, 22.32, 23.80, 22.90 | — |
+| Claim/publish, multi, batch 16 | 8.386, 8.560, 8.513, 8.637, 8.482, 8.599, 8.481, 8.498, 8.487, 8.455 | — |
+| Claim/publish, multi, batch 256 | 7.411, 7.469, 7.384, 7.880, 7.403, 7.560, 7.436, 7.352, 7.355, 7.406 | — |
+| Topology SPSC | 34.95, 33.29, 38.21, 36.92, 37.73, 34.16, 36.75, 38.51, 36.84, 33.62 | — |
+| Topology MPSC-2 | 98.64, 105.6, 114.7, 102.2, 110.1, 101.5, 114.7, 99.62, 98.28, 110.3 | — |
+| Topology MPSC-4 | 136.0, 123.6, 129.1, 127.6, 139.4, 138.5, 137.8, 133.6, 142.0, 144.5 | — |
+| Topology broadcast-2 | 30.56, 29.88, 31.76, 30.24, 41.04, 33.37, 32.14, 33.60, 35.80, 34.54 | — |
+| Topology pipeline-2 | 28.63, 29.74, 29.51, 28.41, 29.57, 28.16, 30.45, 29.33, 28.23, 26.58 | — |
+| Consumer wait, blocking | 177.0, 175.2, 171.1, 169.6, 173.5, 169.8, 179.5, 169.6, 172.9, 168.4 | — |
+| Consumer wait, sleeping | 44.77, 43.07, 46.93, 45.67, 46.87, 48.18, 46.74, 46.52, 43.16, 45.99 | — |
+| Consumer wait, yielding | 35.54, 38.13, 33.36, 36.17, 36.18, 35.40, 35.12, 31.86, 37.25, 37.54 | — |
+| Consumer wait, busy-spin | 45.54, 44.92, 46.29, 48.66, 41.52, 44.54, 45.22, 44.34, 43.41, 45.06 | — |
+| SPSC inline 16 B | 40.25, 39.21, 41.57, 43.02, 42.18, 40.52, 40.28, 40.51, 43.81, 40.16 | 379.1, 389.1, 367.0, 354.7, 361.8, 376.6, 378.8, 376.6, 348.3, 380.0 |
+| SPSC inline 256 B | 152.6, 189.5, 164.9, 201.4, 176.9, 210.4, 219.8, 194.7, 199.5, 179.7 | 1600, 1289, 1480, 1212, 1380, 1160, 1111, 1254, 1224, 1359 |
+| SPSC inline 4 KiB | 2875, 2560, 2575, 2412, 2551, 2381, 2603, 3144, 2199, 2129 | 1359, 1526, 1517, 1619, 1531, 1640, 1501, 1243, 1776, 1835 |
+| SPSC referenced 4 KiB | 2315, 2715, 2349, 2594, 2392, 2689, 2454, 2431, 2406, 2317 | 1687, 1439, 1663, 1506, 1633, 1453, 1592, 1607, 1624, 1686 |
+| MPSC inline 16 B | 134.8, 136.5, 136.9, 131.5, 134.6, 124.5, 129.5, 134.1, 126.3, 120.5 | 113.2, 111.8, 111.5, 116.1, 113.4, 122.6, 117.8, 113.8, 120.8, 126.6 |
+| MPSC inline 256 B | 254.6, 258.1, 256.5, 260.4, 258.5, 286.4, 346.9, 384.3, 259.9, 262.8 | 959.0, 945.8, 951.9, 937.6, 944.6, 852.4, 703.8, 635.3, 939.2, 929.0 |
+| MPSC inline 4 KiB | 3831, 3606, 3200, 3238, 3251, 3214, 3224, 3244, 3277, 3224 | 1020, 1083, 1221, 1207, 1202, 1215, 1212, 1204, 1192, 1212 |
+| MPSC referenced 4 KiB | 3222, 3209, 3243, 3406, 3748, 3717, 3694, 3535, 3641, 3683 | 1212, 1217, 1205, 1147, 1042, 1051, 1057, 1105, 1073, 1060 |
+| Buffered channel MPSC | 102.7, 94.51, 93.09, 99.37, 115.9, 115.9, 116.9, 107.3, 112.4, 104.9 | — |
+| Raw single-producer publish | 14.21, 12.95, 13.30, 13.60, 13.08, 13.40, 13.12, 12.86, 12.48, 12.56 | — |
+| Legacy SPSC | 21.80, 22.42, 21.93, 24.72, 23.17, 24.97, 22.41, 21.99, 22.72, 22.14 | — |
+| Buffered channel SPSC | 72.55, 71.77, 73.29, 72.72, 73.45, 71.75, 72.26, 73.30, 73.46, 73.85 | — |
+| Producer wait, yielding | 2181, 2294, 2291, 2286, 2274, 2286, 2281, 2268, 2292, 2290 | — |
+| Producer wait, blocking | 35626, 35900, 34098, 35968, 35867, 35632, 35568, 35960, 36015, 35753 | — |
+| Producer wait, busy-spin | 642.7, 650.0, 649.6, 660.8, 666.3, 641.2, 672.0, 646.4, 642.0, 640.4 | — |
+
+</details>
+
+### End-to-end throughput
+
+The runner was built once with `go build -o /tmp/lib-disruptor-perf-hDooxtvi/loadtest
+./cmd/loadtest`. Every run used `mode=throughput`, `repetitions=5`, ring size
+65,536, maximum batch 256, yielding producer and consumer waits, a 60-second
+per-repetition timeout, and environment label `local-powersave`. The differing
+flags and all five source-event samples are below. Broadcast-2 and pipeline-2
+perform two deliveries per source event.
+
+| Scenario | Events / warmup | Working set | M events/s, runs 1–5 | payload MiB/s, runs 1–5 |
+|---|---:|---:|---|---|
+| SPSC | 50M / 1M | 0 | 42.248, 40.778, 42.197, 45.853, 46.175 | — |
+| MPSC-4 | 20M / 1M | 0 | 1.773, 1.104, 1.234, 5.246, 1.063 | — |
+| broadcast-2 | 50M / 1M | 0 | 53.345, 52.790, 54.434, 41.911, 30.960 | — |
+| pipeline-2 | 50M / 1M | 0 | 57.633, 56.365, 59.442, 42.278, 34.625 | — |
+| SPSC, 16 B | 50M / 1M | 1 MiB | 34.356, 35.757, 28.174, 22.261, 22.863 | 524.226, 545.604, 429.901, 339.674, 348.859 |
+| SPSC, 256 B | 10M / 500K | 16 MiB | 2.618, 1.333, 1.345, 1.369, 1.360 | 639.255, 325.452, 328.249, 334.217, 332.134 |
+| SPSC, 4 KiB | 1M / 100K | 256 MiB | 0.144, 0.112, 0.114, 0.113, 0.113 | 562.759, 438.662, 443.913, 441.253, 440.776 |
+| MPSC-4, 16 B | 20M / 1M | 1 MiB | 1.190, 0.935, 1.067, 1.010, 1.187 | 18.153, 14.265, 16.281, 15.406, 18.120 |
+| MPSC-4, 256 B | 10M / 500K | 16 MiB | 0.696, 0.631, 0.678, 0.679, 0.663 | 169.840, 154.013, 165.493, 165.754, 161.922 |
+| MPSC-4, 4 KiB | 1M / 100K | 256 MiB | 0.101, 0.086, 0.087, 0.088, 0.088 | 392.847, 336.612, 338.246, 345.250, 343.918 |
+
+Load-run allocation fields are total runtime deltas and include runner
+bookkeeping. Values below are `allocations/bytes` in run order.
+
+| Scenario | Runs 1–5 |
+|---|---|
+| SPSC | 6/424, 6/424, 6/424, 6/424, 6/424 |
+| MPSC-4 | 39/23504, 16/2336, 13/1264, 15/2224, 12/784 |
+| broadcast-2 | 8/1016, 6/424, 8/1016, 8/1016, 6/424 |
+| pipeline-2 | 14/6336, 6/424, 8/1016, 6/424, 6/424 |
+| SPSC, 16 B | 9/1272, 6/424, 6/424, 6/424, 8/1016 |
+| SPSC, 256 B | 9/1272, 6/424, 6/424, 8/1016, 6/424 |
+| SPSC, 4 KiB | 9/1272, 6/424, 8/920, 8/1016, 6/424 |
+| MPSC-4, 16 B | 40/23984, 14/1376, 15/2256, 13/1264, 15/1856 |
+| MPSC-4, 256 B | 21/7544, 15/2224, 14/1376, 12/784, 12/784 |
+| MPSC-4, 4 KiB | 21/7544, 16/2336, 12/784, 13/896, 15/2224 |
+
+For exact invocation reconstruction, topology names use `topology=broadcast`
+except pipeline-2; producer/consumer counts follow the scenario name; and
+`payload-size` is 0, 16, 256, or 4096 as shown.
+
+### Sampled end-to-end latency
+
+Latency was measured separately with zero-byte events and exactly 10,000 samples
+per repetition. SPSC used 50M events, 1M warmup, and `sample-every=5000`;
+MPSC-4 used 20M events, 1M warmup, and `sample-every=2000`. Other flags matched
+the throughput runs.
+
+| Scenario/run | M events/s | p50 | p95 | p99 | p99.9 | max |
+|---|---:|---:|---:|---:|---:|---:|
+| SPSC/1 | 33.975 | 851 ns | 1,468 ns | 4,303 ns | 64,780 ns | 137,635 ns |
+| SPSC/2 | 34.582 | 820 ns | 1,476 ns | 8,845 ns | 196,861 ns | 282,617 ns |
+| SPSC/3 | 24.667 | 1,215 ns | 1,918 ns | 3,145 ns | 52,629 ns | 152,835 ns |
+| SPSC/4 | 23.136 | 1,401 ns | 2,002 ns | 3,708 ns | 40,383 ns | 244,022 ns |
+| SPSC/5 | 23.317 | 1,373 ns | 1,964 ns | 3,345 ns | 25,418 ns | 203,229 ns |
+| MPSC-4/1 | 1.275 | 59,518,812 ns | 77,202,200 ns | 93,308,430 ns | 123,826,301 ns | 126,773,437 ns |
+| MPSC-4/2 | 2.024 | 595 ns | 61,655,016 ns | 67,166,371 ns | 71,563,843 ns | 73,034,988 ns |
+| MPSC-4/3 | 7.529 | 301 ns | 584 ns | 1,644 ns | 6,155 ns | 207,337 ns |
+| MPSC-4/4 | 1.470 | 59,399,607 ns | 67,517,182 ns | 73,891,872 ns | 79,189,399 ns | 80,408,905 ns |
+| MPSC-4/5 | 7.632 | 349 ns | 687 ns | 3,650 ns | 142,859 ns | 226,167 ns |
+
+Latency allocation/byte deltas were SPSC: `6/424, 6/424, 6/424, 6/424,
+6/424`; and MPSC-4: `39/23504, 15/2224, 13/1264, 13/1264, 15/2224`.
+
+The bimodal MPSC throughput and 60–127 ms latency stalls are scheduler-sensitive
+behavior on this shared desktop host. They are retained as measured and make
+this host unsuitable for a latency regression gate.
+
+### Process resource evidence
+
+GNU `time -v` wrapped all five repetitions of each process. CPU is aggregate
+process utilization; RSS and context switches cover setup and warmup too.
+
+| Scenario | CPU | Max RSS | Voluntary / involuntary context switches |
+|---|---:|---:|---:|
+| SPSC | 214% | 13,876 KiB | 257,148 / 1,006 |
+| MPSC-4 | 535% | 15,572 KiB | 3,897,953 / 323,583 |
+| broadcast-2 | 305% | 12,500 KiB | 109,144 / 1,332 |
+| pipeline-2 | 314% | 14,028 KiB | 226,309 / 1,182 |
+| SPSC, 16 B | 220% | 14,804 KiB | 528,128 / 885 |
+| SPSC, 256 B | 251% | 44,628 KiB | 2,678,184 / 4,227 |
+| SPSC, 4 KiB | 247% | 381,240 KiB | 3,325,034 / 4,706 |
+| MPSC-4, 16 B | 517% | 12,372 KiB | 4,646,968 / 550,931 |
+| MPSC-4, 256 B | 580% | 43,476 KiB | 5,253,569 / 389,575 |
+| MPSC-4, 4 KiB | 532% | 373,164 KiB | 3,718,544 / 267,111 |
+| SPSC latency | 217% | 13,012 KiB | 484,310 / 1,158 |
+| MPSC-4 latency | 538% | 15,316 KiB | 2,345,885 / 188,171 |
+
+## Superseded full v1 baseline — 2026-09-12
 
 Measured from clean commit `b3a4c3d6225ca3f7fc000f10503a927e16f3eb19`.
 These are local development results, not portable guarantees or release
@@ -89,20 +306,20 @@ must not be used for a statistical regression decision.
 | Legacy | Raw publish | 11.84 / 12.50 / 13.25 | 0 / 0 |
 | Legacy | SPSC | 21.58 / 23.02 / 23.94 | 0 / 0 |
 
-Payload entries are preallocated for all 65,536 slots and fully touched by the
+Payload entries are preallocated for each of the payload benchmark's 1,024 slots and fully touched by the
 producer and consumer. The 4 KiB referenced case measures external reusable
 storage separately from the inline case.
 
 | Scenario | ns/op min / median / max | payload MiB/s min / median / max | Working set |
 |---|---:|---:|---:|
-| SPSC inline 16 B | 37.84 / 39.92 / 42.22 | 361.4 / 382.4 / 403.2 | 1 MiB |
-| SPSC inline 256 B | 155.0 / 165.1 / 178.4 | 1,369 / 1,479 / 1,576 | 16 MiB |
-| SPSC inline 4 KiB | 2,152 / 2,298 / 2,722 | 1,435 / 1,700 / 1,815 | 256 MiB |
-| SPSC referenced 4 KiB | 2,246 / 2,406 / 2,616 | 1,493 / 1,624 / 1,739 | 256 MiB |
-| MPSC inline 16 B | 122.1 / 133.2 / 137.4 | 111.1 / 114.5 / 125.0 | 1 MiB |
-| MPSC inline 256 B | 231.6 / 235.0 / 257.2 | 949.4 / 1,039 / 1,054 | 16 MiB |
-| MPSC inline 4 KiB | 3,332 / 3,406 / 3,834 | 1,019 / 1,147 / 1,172 | 256 MiB |
-| MPSC referenced 4 KiB | 3,334 / 3,434 / 3,779 | 1,034 / 1,138 / 1,171 | 256 MiB |
+| SPSC inline 16 B | 37.84 / 39.92 / 42.22 | 361.4 / 382.4 / 403.2 | 16 KiB |
+| SPSC inline 256 B | 155.0 / 165.1 / 178.4 | 1,369 / 1,479 / 1,576 | 256 KiB |
+| SPSC inline 4 KiB | 2,152 / 2,298 / 2,722 | 1,435 / 1,700 / 1,815 | 4 MiB |
+| SPSC referenced 4 KiB | 2,246 / 2,406 / 2,616 | 1,493 / 1,624 / 1,739 | 4 MiB |
+| MPSC inline 16 B | 122.1 / 133.2 / 137.4 | 111.1 / 114.5 / 125.0 | 16 KiB |
+| MPSC inline 256 B | 231.6 / 235.0 / 257.2 | 949.4 / 1,039 / 1,054 | 256 KiB |
+| MPSC inline 4 KiB | 3,332 / 3,406 / 3,834 | 1,019 / 1,147 / 1,172 | 4 MiB |
+| MPSC referenced 4 KiB | 3,334 / 3,434 / 3,779 | 1,034 / 1,138 / 1,171 | 4 MiB |
 
 <details>
 <summary>All microbenchmark samples in execution order</summary>
