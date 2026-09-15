@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.3.0...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* add batch publication helpers ([#31](https://github.com/ayeshLK/lib-disruptor/issues/31)) ([b43c90c](https://github.com/ayeshLK/lib-disruptor/commit/b43c90ca350414c4a03ddf599cc959d48f18e37a)), closes [#9](https://github.com/ayeshLK/lib-disruptor/issues/9)
+* establish v1 API compatibility contract ([#30](https://github.com/ayeshLK/lib-disruptor/issues/30)) ([56c9032](https://github.com/ayeshLK/lib-disruptor/commit/56c9032fd512e98d4affa801aaba82900fb05fc3)), closes [#13](https://github.com/ayeshLK/lib-disruptor/issues/13)
+
 ## [0.3.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.2.0...v0.3.0) (2026-09-15)
 
 
