@@ -149,4 +149,13 @@ unblock waiters.
 - Gating lists use copy-on-write atomic snapshots.
 - `Sequence` pads `atomic.Int64` without architecture-specific `unsafe` logic.
 
+### Sequence range
+
+Logical sequences use signed `int64` arithmetic and must not cross the
+`int64` boundary. The library does not support sequence wraparound at
+`MaxInt64`; applications with an exceptionally long-lived ring must recreate it
+before reaching that limit. Boundary tests cover representable values near the
+limit, but overflow is an operational limit rather than a supported protocol
+state.
+
 For benchmarks and measurement guidance, see [PERFORMANCE.md](../PERFORMANCE.md).
