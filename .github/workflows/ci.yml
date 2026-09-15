@@ -106,6 +106,7 @@ jobs:
   platforms:
     name: Smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -122,4 +123,4 @@ jobs:
           check-latest: true
           cache: false
       - name: Test
-        run: go test ./...
+        run: go test -timeout=4m ./...
