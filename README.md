@@ -86,7 +86,9 @@ return ring.Publish(context.Background(), func(event *OrderEvent, _ int64) error
 ```
 
 See [`examples/basic`](examples/basic) for a complete, runnable example with
-orderly shutdown and processor-result handling.
+orderly shutdown and processor-result handling. For production topology,
+sizing, ownership, and operational guidance, read the
+[production guide](docs/production.md).
 
 ## Resolve raw claims
 
@@ -136,6 +138,8 @@ events.
 
 - Read the [usage guide](docs/usage.md) for batch claims, producer capacity
   waits, graph setup, shutdown, error handling, and event-ownership rules.
+- Read the [production guide](docs/production.md) for sizing, topology recipes,
+  lifecycle operations, and common mistakes.
 - Browse the [API reference](https://pkg.go.dev/github.com/ayeshLK/lib-disruptor)
   for the complete public contract.
 - See [PERFORMANCE.md](PERFORMANCE.md) for the measurement model and
