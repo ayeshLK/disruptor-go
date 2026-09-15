@@ -161,6 +161,47 @@ func (r *RingBuffer[T]) TryPublish(translator EventTranslator[T]) (err error) {
 	return translator(r.Get(sequence), sequence)
 }
 
+// PublishN claims count contiguous sequences, translates each event, and
+// publishes the complete range. Translation stops at the first error, but all
+// claimed sequences are still published to prevent a visibility gap. A panic
+// also publishes the complete range before propagating.
+func (r *RingBuffer[T]) PublishN(ctx context.Context, count int64, translator EventTranslator[T]) (err error) {
+	if translator == nil {
+		return ErrNilTranslator
+	}
+	high, err := r.NextN(ctx, count)
+	if err != nil {
+		return err
+	}
+	low := high - count + 1
+	defer r.PublishRange(low, high)
+	for sequence := low; sequence <= high; sequence++ {
+		if err := translator(r.Get(sequence), sequence); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TryPublishN is the non-blocking form of PublishN.
+func (r *RingBuffer[T]) TryPublishN(count int64, translator EventTranslator[T]) (err error) {
+	if translator == nil {
+		return ErrNilTranslator
+	}
+	high, err := r.TryNextN(count)
+	if err != nil {
+		return err
+	}
+	low := high - count + 1
+	defer r.PublishRange(low, high)
+	for sequence := low; sequence <= high; sequence++ {
+		if err := translator(r.Get(sequence), sequence); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Cursor returns the producer cursor.
 func (r *RingBuffer[T]) Cursor() int64 { return r.sequencer.Cursor().Load() }
 

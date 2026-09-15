@@ -32,6 +32,7 @@ func (r *RingBuffer[T]) NewBarrier(dependencies ...*Sequence) *SequenceBarrier
 func (r *RingBuffer[T]) Next(ctx context.Context) (int64, error)
 func (r *RingBuffer[T]) NextN(ctx context.Context, count int64) (int64, error)
 func (r *RingBuffer[T]) Publish(ctx context.Context, translator EventTranslator[T]) (err error)
+func (r *RingBuffer[T]) PublishN(ctx context.Context, count int64, translator EventTranslator[T]) (err error)
 func (r *RingBuffer[T]) PublishRange(low, high int64)
 func (r *RingBuffer[T]) PublishSequence(sequence int64)
 func (r *RingBuffer[T]) RemainingCapacity() int64
@@ -40,6 +41,7 @@ func (r *RingBuffer[T]) Shutdown(ctx context.Context) error
 func (r *RingBuffer[T]) TryNext() (int64, error)
 func (r *RingBuffer[T]) TryNextN(count int64) (int64, error)
 func (r *RingBuffer[T]) TryPublish(translator EventTranslator[T]) (err error)
+func (r *RingBuffer[T]) TryPublishN(count int64, translator EventTranslator[T]) (err error)
 func (s *Sequence) Add(delta int64) int64
 func (s *Sequence) CompareAndSwap(old, new int64) bool
 func (s *Sequence) Load() int64

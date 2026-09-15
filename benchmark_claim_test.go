@@ -15,9 +15,68 @@
 package disruptor
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
+
+func BenchmarkBatchPublishHelpers(b *testing.B) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		for _, batch := range []int64{1, 16, 256} {
+			for _, helper := range []string{"blocking", "try"} {
+				name := fmt.Sprintf("%s/%s/batch-%d", producerName(producer), helper, batch)
+				b.Run(name, func(b *testing.B) {
+					ring, err := New(benchmarkRingSize, producer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait())
+					if err != nil {
+						b.Fatal(err)
+					}
+					translate := func(event *benchmarkEvent, sequence int64) error {
+						event.Value = sequence
+						return nil
+					}
+					b.ReportAllocs()
+					b.ResetTimer()
+					for b.Loop() {
+						if helper == "blocking" {
+							if err := ring.PublishN(context.Background(), batch, translate); err != nil {
+								b.Fatal(err)
+							}
+						} else if err := ring.TryPublishN(batch, translate); err != nil {
+							b.Fatal(err)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func BenchmarkManualTryPublishRange(b *testing.B) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		for _, batch := range []int64{1, 16, 256} {
+			name := fmt.Sprintf("%s/batch-%d", producerName(producer), batch)
+			b.Run(name, func(b *testing.B) {
+				ring, err := New(benchmarkRingSize, producer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait())
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for b.Loop() {
+					high, err := ring.TryNextN(batch)
+					if err != nil {
+						b.Fatal(err)
+					}
+					low := high - batch + 1
+					for sequence := low; sequence <= high; sequence++ {
+						ring.Get(sequence).Value = sequence
+					}
+					ring.PublishRange(low, high)
+				}
+			})
+		}
+	}
+}
 
 func BenchmarkTryClaimPublishMatrix(b *testing.B) {
 	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {

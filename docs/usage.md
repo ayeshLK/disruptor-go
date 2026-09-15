@@ -35,7 +35,27 @@ err := ring.Publish(ctx, func(event *OrderEvent, sequence int64) error {
 `TryPublish` has the same translator contract but returns
 `ErrInsufficientCapacity` immediately when it cannot claim an event.
 
-For one producer filling a batch, claim a range and publish it after every
+`PublishN` and `TryPublishN` apply the same translator to a contiguous batch
+and pass each event's logical sequence to it:
+
+```go
+err := ring.PublishN(ctx, 4, func(event *OrderEvent, sequence int64) error {
+	event.OrderID = nextOrderID(sequence)
+	return nil
+})
+```
+
+`PublishN` waits for capacity; `TryPublishN` returns
+`ErrInsufficientCapacity` immediately. A non-positive count returns
+`ErrInvalidClaimSize`, and a nil translator returns `ErrNilTranslator` before
+claiming. Translation stops at the first returned error, but the complete
+claimed range is still published so a partial translation cannot leave a
+publication gap. A panic also publishes the complete range before propagating;
+callers that need recovery must recover around the helper call. The remaining
+events in a partially translated range must therefore be safe for consumers to
+observe, just as with a translator error in `Publish`.
+
+For one producer filling a batch manually, claim a range and publish it after every
 event has been initialized:
 
 ```go
