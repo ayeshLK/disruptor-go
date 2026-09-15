@@ -53,16 +53,25 @@ third-party dependencies unless a dependency is clearly justified and approved.
   `7ad9f998afface508b487ac3465c3aac36c8b283` and closes issue #16. PR #33
   recorded the focused benchmark refresh at
   `190c0dbdfa0388c38557cb5cf06c670805e98551`.
-- No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
-  event poller), #17 (v1 release validation), and #18 (release-readiness
-  tracker).
-- Issue #10 is implemented on this branch at `3521cf6`; PR #35 is open with
-  the poller API, benchmark entry, and synchronized handoff context. These
-  changes are not part of `main` until the PR is merged.
-- `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
-  dated 2026-09-15. The poller entry is measured from `3521cf6`. A full
-  canonical run exceeded the local ten-minute limit before completion and is
-  intentionally not recorded.
+- No P1 issues remain open. The remaining open P2 issues are #17 (v1 release
+  validation) and #18 (release-readiness tracker); issue #10 was merged through
+  PR #35 at `6910ef1`.
+- `BENCHMARKS.md` contains focused batch-publication and poller API refreshes,
+  a repository-wide grouped sweep, and a controlled MPSC claim/publish rerun
+  dated 2026-09-15. The post-merge poller, full sweep, and rerun are measured
+  from `6910ef1`; the full sweep covered all 19 top-level and 66 sub-benchmarks.
+  The single combined command exceeded the local ten-minute limit, so the
+  complete results were collected sequentially. The isolated MPSC rerun
+  reproduced the higher batch-16 and batch-256 values; retain this as
+  informational variance evidence, not a release threshold.
+- PR #36 (`docs: record repository benchmark sweep`) is open from branch
+  `docs/poller-benchmark-refresh`. Its latest commit is `128248c`; the branch
+  also contains `61b9ef8` and `8546b73`. It records the grouped full sweep and
+  controlled MPSC rerun; do not duplicate these entries after the PR merges.
+- This checkout's local `main` remains a stale divergent branch (`f49d3e0`, one
+  local commit ahead and three commits behind `origin/main`). Do not reset or
+  delete it to synchronize; fetch `origin/main` and create a fresh branch from
+  that ref for future work.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 

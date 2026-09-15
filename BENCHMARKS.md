@@ -192,6 +192,181 @@ reported 0 B/op and 0 allocs/op.
 The poller steady-state paths are allocation-free. Processing values include
 producer work by design; the idle case isolates the no-event polling path.
 
+## Post-merge poller API refresh — 2026-09-15
+
+Measured from merged commit `6910ef1` (`feat: add pull-based event poller
+(#35)`) on `origin/main`. This repeats the focused poller benchmark after the
+API landed on the main branch; it does not replace either the earlier poller
+entry or the canonical matrix. These are local development results, not
+portable guarantees or release thresholds.
+
+### Environment and command
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+```bash
+go test -run='^$' -bench='^BenchmarkEventPoller' -benchmem \\
+  -benchtime=1s -count=10
+```
+
+Values are minimum / median / maximum across ten sequential samples. Every case
+reported 0 B/op and 0 allocs/op.
+
+| Benchmark | ns/op min / median / max | Allocations |
+|---|---:|---:|
+| Poller, single, batch 1 | 32.75 / 34.215 / 42.38 | 0 / 0 |
+| Poller, single, batch 16 | 148.4 / 152.95 / 171.2 | 0 / 0 |
+| Poller, single, batch 256 | 1,920 / 2,048.5 / 2,809 | 0 / 0 |
+| Poller, multi, batch 1 | 51.49 / 57.23 / 61.01 | 0 / 0 |
+| Poller, multi, batch 16 | 352.8 / 357.15 / 372.3 | 0 / 0 |
+| Poller, multi, batch 256 | 5,186 / 5,211.5 / 5,943 | 0 / 0 |
+| Poller idle | 4.179 / 4.288 / 4.386 | 0 / 0 |
+
+The post-merge run confirms allocation-free processing and idle paths. The
+wider single-producer batch-256 and multi-producer batch-1 ranges show ordinary
+scheduler and host-load variance; neither run should be treated as a release
+threshold.
+
+## Repository-wide benchmark sweep — 2026-09-15
+
+Measured from merged commit `6910ef1` (`feat: add pull-based event poller (#35)`).
+The single combined ten-sample command exceeded the local ten-minute execution
+limit, so the same benchmark selection was completed in sequential groups to
+avoid losing the full run. This entry reports the completed grouped sweep; it
+is not a release threshold.
+
+### Environment and commands
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+Each command used `-run='^$' -benchmem -benchtime=1s -count=10`; groups were run
+sequentially:
+
+```bash
+go test -run='^$' -bench='^(BenchmarkRawPublish|BenchmarkSPSC|BenchmarkBufferedChannel|BenchmarkProducerWaitUnderSlowGate)' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^(BenchmarkBatchPublishHelpers|BenchmarkManualTryPublishRange|BenchmarkTryClaimPublishMatrix|BenchmarkMultiProducerPublicationGapScan|BenchmarkTryClaimDiscardMatrix)' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^(BenchmarkClaimPublishMatrix|BenchmarkTopologyMatrix|BenchmarkConsumerWaitMatrix)' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^BenchmarkPayloadSensitivitySPSC' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^BenchmarkPayloadSensitivityMPSC' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^BenchmarkBufferedChannelMPSC' -benchmem -benchtime=1s -count=10
+go test -run='^$' -bench='^BenchmarkEventPoller' -benchmem -benchtime=1s -count=10
+```
+
+Values are minimum / median / maximum across ten sequential samples. Allocation
+is `B/op / allocs/op`; payload rows additionally report `payload-MiB/s` in the
+same min / median / max form.
+
+| Benchmark | ns/op min / median / max | payload-MiB/s min / median / max | B/op / allocs/op |
+|---|---:|---:|---:|
+| `BenchmarkBatchPublishHelpers/multi/blocking/batch-1` | 39.24 / 45.36 / 47.76 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/multi/blocking/batch-16` | 256.3 / 296.3 / 311.6 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/multi/blocking/batch-256` | 3774 / 4218 / 4291 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/multi/try/batch-1` | 36.74 / 42.05 / 45.09 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/multi/try/batch-16` | 258.3 / 284.05 / 296.8 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/multi/try/batch-256` | 3754 / 4281.5 / 4838 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/blocking/batch-1` | 17.03 / 18.275 / 26.09 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/blocking/batch-16` | 50.3 / 55.385 / 66.53 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/blocking/batch-256` | 658.2 / 699.1 / 953.4 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/try/batch-1` | 21.86 / 23.435 / 35.24 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/try/batch-16` | 51.85 / 58.125 / 68.79 | — | 0 / 0 |
+| `BenchmarkBatchPublishHelpers/single/try/batch-256` | 615.1 / 655.8 / 681.7 | — | 0 / 0 |
+| `BenchmarkBufferedChannelBroadcast2` | 91.97 / 93.195 / 96.27 | — | 0 / 0 |
+| `BenchmarkBufferedChannelMPSC` | 55.76 / 70.975 / 77.99 | — | 0 / 0 |
+| `BenchmarkBufferedChannelPipeline2` | 91.35 / 93.95 / 112.9 | — | 0 / 0 |
+| `BenchmarkBufferedChannelSPSC` | 56.91 / 57.745 / 61.89 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/multi/batch-1` | 26.4 / 26.755 / 28.71 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/multi/batch-16` | 12.33 / 12.445 / 13.39 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/multi/batch-256` | 11.56 / 11.705 / 13.43 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/single/batch-1` | 10.1 / 10.235 / 10.57 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/single/batch-16` | 1.221 / 1.2505 / 1.406 | — | 0 / 0 |
+| `BenchmarkClaimPublishMatrix/single/batch-256` | 0.7306 / 0.76805 / 0.8354 | — | 0 / 0 |
+| `BenchmarkConsumerWaitMatrix/blocking` | 136.1 / 139.45 / 157.9 | — | 112 / 1 |
+| `BenchmarkConsumerWaitMatrix/busy-spin` | 38.96 / 42.05 / 47.91 | — | 0 / 0 |
+| `BenchmarkConsumerWaitMatrix/sleeping` | 35.42 / 37.055 / 41.54 | — | 0 / 0 |
+| `BenchmarkConsumerWaitMatrix/yielding` | 34.47 / 36.285 / 37.82 | — | 0 / 0 |
+| `BenchmarkEventPoller/multi/batch-1` | 51.22 / 52.495 / 55.25 | — | 0 / 0 |
+| `BenchmarkEventPoller/multi/batch-16` | 363.9 / 369.85 / 454.7 | — | 0 / 0 |
+| `BenchmarkEventPoller/multi/batch-256` | 6141 / 6263 / 6708 | — | 0 / 0 |
+| `BenchmarkEventPoller/single/batch-1` | 31.26 / 31.505 / 33.21 | — | 0 / 0 |
+| `BenchmarkEventPoller/single/batch-16` | 147.9 / 156.85 / 165.8 | — | 0 / 0 |
+| `BenchmarkEventPoller/single/batch-256` | 2036 / 2071.5 / 2402 | — | 0 / 0 |
+| `BenchmarkEventPollerIdle` | 4.992 / 5.0735 / 5.265 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/multi/batch-1` | 30.73 / 31.03 / 33.37 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/multi/batch-16` | 199.2 / 201.95 / 231.5 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/multi/batch-256` | 3064 / 3078.5 / 3308 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/single/batch-1` | 11.38 / 11.675 / 12.33 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/single/batch-16` | 26.93 / 28.115 / 37.86 | — | 0 / 0 |
+| `BenchmarkManualTryPublishRange/single/batch-256` | 290.7 / 299.5 / 348.8 | — | 0 / 0 |
+| `BenchmarkMultiProducerPublicationGapScan` | 50.25 / 51.49 / 55.84 | — | 0 / 0 |
+| `BenchmarkPayloadSensitivityMPSC/inline-16B` | 70.29 / 120.95 / 129.2 | 118.1 / 126.2 / 217.1 | 0 / 0 |
+| `BenchmarkPayloadSensitivityMPSC/inline-256B` | 223.9 / 226.65 / 245.7 | 993.8 / 1077 / 1090 | 0 / 0 |
+| `BenchmarkPayloadSensitivityMPSC/inline-4KiB` | 3268 / 3319.5 / 3546 | 1102 / 1177 / 1195 | 0 / 0 |
+| `BenchmarkPayloadSensitivityMPSC/referenced-4KiB` | 3242 / 3308.5 / 3443 | 1135 / 1180.5 / 1205 | 0 / 0 |
+| `BenchmarkPayloadSensitivitySPSC/inline-16B` | 28.91 / 29.35 / 35.18 | 433.7 / 519.9 / 527.8 | 0 / 0 |
+| `BenchmarkPayloadSensitivitySPSC/inline-256B` | 119.5 / 122.65 / 131.7 | 1854 / 1991 / 2043 | 0 / 0 |
+| `BenchmarkPayloadSensitivitySPSC/inline-4KiB` | 1649 / 1671 / 1780 | 2194 / 2337.5 / 2368 | 0 / 0 |
+| `BenchmarkPayloadSensitivitySPSC/referenced-4KiB` | 1660 / 2045.5 / 2691 | 1451 / 1909.5 / 2353 | 0 / 0 |
+| `BenchmarkProducerWaitUnderSlowGate/blocking` | 36528 / 38780.5 / 43099 | — | 112 / 1 |
+| `BenchmarkProducerWaitUnderSlowGate/busy-spin` | 494.9 / 596.45 / 651.3 | — | 0 / 0 |
+| `BenchmarkProducerWaitUnderSlowGate/yielding` | 1499 / 1581 / 1843 | — | 0 / 0 |
+| `BenchmarkRawPublish` | 9.878 / 10.05 / 10.5 | — | 0 / 0 |
+| `BenchmarkSPSC` | 16.71 / 17.62 / 18.39 | — | 0 / 0 |
+| `BenchmarkTopologyMatrix/MPSC-2` | 110.6 / 119.35 / 128.6 | — | 0 / 0 |
+| `BenchmarkTopologyMatrix/MPSC-4` | 120 / 122.65 / 134.8 | — | 0 / 0 |
+| `BenchmarkTopologyMatrix/SPSC` | 34.88 / 36.99 / 41.07 | — | 0 / 0 |
+| `BenchmarkTopologyMatrix/broadcast-2` | 29.76 / 36.575 / 43.04 | — | 0 / 0 |
+| `BenchmarkTopologyMatrix/pipeline-2` | 22.04 / 22.8 / 24.1 | — | 0 / 0 |
+| `BenchmarkTryClaimDiscardMatrix/multi` | 29.99 / 30.19 / 32.5 | — | 0 / 0 |
+| `BenchmarkTryClaimDiscardMatrix/single` | 19.84 / 20.225 / 21.52 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/multi/batch-1` | 29.69 / 30.615 / 35.01 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/multi/batch-16` | 14.13 / 14.325 / 16.22 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/multi/batch-256` | 13.17 / 13.405 / 14.19 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/single/batch-1` | 10.01 / 10.405 / 10.89 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/single/batch-16` | 1.249 / 1.3935 / 1.725 | — | 0 / 0 |
+| `BenchmarkTryClaimPublishMatrix/single/batch-256` | 0.8168 / 0.8913 / 1.049 | — | 0 / 0 |
+
+The grouped sweep covered all 19 top-level benchmarks and 66 sub-benchmarks
+listed by `go test -run=^$ -list=^Benchmark`. All cases were allocation-free
+except the blocking consumer-wait and blocking producer-wait cases, which
+reported 112 B/op and 1 alloc/op. These local results reflect ordinary host and
+scheduler variance and should not be used as release thresholds.
+
+## Controlled MPSC claim/publish rerun — 2026-09-15
+
+The repository-wide sweep showed higher MPSC `BenchmarkClaimPublishMatrix`
+values for batches 16 and 256 than the 2026-09-12 canonical baseline. The two
+cases were rerun in isolation for 20 sequential samples on merged commit
+`6910ef1`, with the same ring size, wait strategy, Go version, GOMAXPROCS, and
+CPU governor. Both cases reproduced the newer values and reported zero
+allocations:
+
+```bash
+GOMAXPROCS=8 go test -run='^$' \\
+  -bench='^BenchmarkClaimPublishMatrix/multi/batch-(16|256)$' \\
+  -benchmem -benchtime=1s -count=20
+```
+
+| Benchmark | ns/op min / median / max | Compared with 2026-09-12 median |
+|---|---:|---:|
+| MPSC claim/publish, batch 16 | 12.31 / 12.54 / 14.30 | 8.493 → 12.54 (+47.7%) |
+| MPSC claim/publish, batch 256 | 11.55 / 11.58 / 13.20 | 7.409 → 11.58 (+56.3%) |
+
+The isolated rerun confirms a repeatable host/session difference rather than a
+single outlier, but it does not establish a code-causal regression: the older
+and newer samples were collected on different runs and under ordinary desktop
+scheduler variance. Treat these values as informational until a controlled
+runner and variance study are available.
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.
