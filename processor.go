@@ -46,8 +46,9 @@ const (
 	processorHalted
 )
 
-// BatchProcessor waits on a barrier, handles all currently available events in
-// order, then advances its consumer sequence once per batch.
+// BatchProcessor waits on a barrier, handles all currently available published
+// events in order, skips discarded claims, then advances its consumer sequence
+// once per batch.
 type BatchProcessor[T any] struct {
 	ring         *RingBuffer[T]
 	barrier      *SequenceBarrier
@@ -114,8 +115,15 @@ func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 		if available-next+1 > p.maxBatchSize {
 			end = next + p.maxBatchSize - 1
 		}
+		lastDelivered := end
+		for lastDelivered >= next && p.ring.IsDiscarded(lastDelivered) {
+			lastDelivered--
+		}
 		for sequence := next; sequence <= end; sequence++ {
-			if err := p.handle(sequence, sequence == end); err != nil {
+			if p.ring.IsDiscarded(sequence) {
+				continue
+			}
+			if err := p.handle(sequence, sequence == lastDelivered); err != nil {
 				return err
 			}
 		}

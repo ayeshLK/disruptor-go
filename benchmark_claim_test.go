@@ -71,3 +71,23 @@ func BenchmarkMultiProducerPublicationGapScan(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkTryClaimDiscardMatrix(b *testing.B) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		b.Run(producerName(producer), func(b *testing.B) {
+			ring, err := New(benchmarkRingSize, producer, func() *benchmarkEvent { return new(benchmarkEvent) }, BusySpinWait())
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				sequence, err := ring.TryNext()
+				if err != nil {
+					b.Fatal(err)
+				}
+				ring.DiscardSequence(sequence)
+			}
+		})
+	}
+}

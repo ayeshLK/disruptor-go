@@ -33,6 +33,11 @@ const (
 
 type sequenceList []*Sequence
 
+type discardSequencer interface {
+	Discard(int64, int64)
+	IsDiscarded(int64) bool
+}
+
 // Sequencer coordinates producer claims, publication, capacity, and consumer gates.
 type Sequencer interface {
 	Next(context.Context, int64) (int64, error)

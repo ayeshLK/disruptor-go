@@ -85,6 +85,16 @@ return ring.Publish(context.Background(), func(event *OrderEvent, _ int64) error
 See [`examples/basic`](examples/basic) for a complete, runnable example with
 orderly shutdown and processor-result handling.
 
+## Resolve raw claims
+
+The `Next` and `TryNext` APIs transfer ownership of a claimed event to the
+caller. Resolve every successful claim with `PublishSequence`/`PublishRange` or
+`DiscardSequence`/`DiscardRange`, including failure and panic paths. Discarded
+sequences advance barriers and gating without invoking consumer handlers; use
+`IsDiscarded` when reading a raw barrier range. See the
+[usage guide](docs/usage.md#publishing-events) for a safe deferred-resolution
+pattern.
+
 ## Choose your setup
 
 ### Producer mode
