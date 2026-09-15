@@ -30,6 +30,30 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `benchmark_matrix_test.go`: canonical topology, wait, batching, and payload matrix.
 - `PERFORMANCE.md`: measurement model, canonical matrix, and regression policy.
 - `BENCHMARKS.md`: dated, machine-specific baseline results.
+- `API_COMPATIBILITY.md`: v1 public-surface and compatibility contract.
+- `api_public.txt`: generated exported API baseline checked by CI.
+- `cmd/apicheck`: dependency-free exported API snapshot checker.
+- `docs/migration-v1.md`: pre-v1 migration guidance.
+- `docs/production.md`: production topology and operational guide.
+
+## Current handoff state (2026-09-15)
+
+- `v0.3.0` is the latest published release. Its immutable tag points to
+  `6a651d79a3da9eee7a3638a9c434254f25aee09`.
+- PR #30 (`feat: establish v1 API compatibility contract`) is merged at
+  `56c9032fd512e98d4affa801aaba82900fb05fc3`. It established the exported API
+  baseline, compatibility contract, migration guide, and v1-capable release
+  validation.
+- PR #31 (`feat: add batch publication helpers`) is merged at
+  `b43c90ca350414c4a03ddf599cc959d48f18e37a`. It closes issue #9 and adds
+  `PublishN` and `TryPublishN`.
+- PR #32 (`docs: add production usage guide`) is open for issue #16. Its local
+  implementation commit is `0ee3775`; it is not part of `main` until merged.
+- No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
+  event poller), #16 (production guide, covered by PR #32), #17 (v1 release
+  validation), and #18 (release-readiness tracker).
+- Before starting new work, fetch `origin/main`; do not assume this branch or
+  the local remote-tracking ref includes a newly merged PR.
 
 ## Correctness invariants
 
@@ -58,6 +82,9 @@ Treat these as design constraints, not implementation details:
 - `Publish` and `TryPublish` publish their claimed sequence even if the translator
   returns an error. Preserve this behavior so a failed translator cannot leave a
   permanent publication gap.
+- `PublishN` and `TryPublishN` validate before claiming, stop translation at the
+  first error, and publish the complete claimed range on error or panic. Events
+  after a partial translation must therefore be safe for consumers to observe.
 - Events must not be retained or mutated after a consumer advances its sequence.
 - Context cancellation, `Halt`, barrier alerts, and `Close` must unblock waiters.
   Close is immediate rather than draining: visible events remain readable, while
