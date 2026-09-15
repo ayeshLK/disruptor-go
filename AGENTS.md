@@ -56,11 +56,14 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - No P1 issues remain open. The remaining open P2 issues are #17 (v1 release
   validation) and #18 (release-readiness tracker); issue #10 was merged through
   PR #35 at `6910ef1`.
-- `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
-  plus a repository-wide grouped sweep dated 2026-09-15. The post-merge poller
-  and full sweep entries are measured from `6910ef1`; the full sweep covered all
-  19 top-level and 66 sub-benchmarks. The single combined command exceeded the
-  local ten-minute limit, so the complete results were collected sequentially.
+- `BENCHMARKS.md` contains focused batch-publication and poller API refreshes,
+  a repository-wide grouped sweep, and a controlled MPSC claim/publish rerun
+  dated 2026-09-15. The post-merge poller, full sweep, and rerun are measured
+  from `6910ef1`; the full sweep covered all 19 top-level and 66 sub-benchmarks.
+  The single combined command exceeded the local ten-minute limit, so the
+  complete results were collected sequentially. The isolated MPSC rerun
+  reproduced the higher batch-16 and batch-256 values; retain this as
+  informational variance evidence, not a release threshold.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 

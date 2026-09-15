@@ -341,6 +341,32 @@ except the blocking consumer-wait and blocking producer-wait cases, which
 reported 112 B/op and 1 alloc/op. These local results reflect ordinary host and
 scheduler variance and should not be used as release thresholds.
 
+## Controlled MPSC claim/publish rerun — 2026-09-15
+
+The repository-wide sweep showed higher MPSC `BenchmarkClaimPublishMatrix`
+values for batches 16 and 256 than the 2026-09-12 canonical baseline. The two
+cases were rerun in isolation for 20 sequential samples on merged commit
+`6910ef1`, with the same ring size, wait strategy, Go version, GOMAXPROCS, and
+CPU governor. Both cases reproduced the newer values and reported zero
+allocations:
+
+```bash
+GOMAXPROCS=8 go test -run='^$' \\
+  -bench='^BenchmarkClaimPublishMatrix/multi/batch-(16|256)$' \\
+  -benchmem -benchtime=1s -count=20
+```
+
+| Benchmark | ns/op min / median / max | Compared with 2026-09-12 median |
+|---|---:|---:|
+| MPSC claim/publish, batch 16 | 12.31 / 12.54 / 14.30 | 8.493 → 12.54 (+47.7%) |
+| MPSC claim/publish, batch 256 | 11.55 / 11.58 / 13.20 | 7.409 → 11.58 (+56.3%) |
+
+The isolated rerun confirms a repeatable host/session difference rather than a
+single outlier, but it does not establish a code-causal regression: the older
+and newer samples were collected on different runs and under ordinary desktop
+scheduler variance. Treat these values as informational until a controlled
+runner and variance study are available.
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.
