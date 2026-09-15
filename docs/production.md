@@ -161,6 +161,45 @@ Treat `BatchProcessor.Run` as the supervision boundary:
 handler run. A handler should finish within the memory and latency budget of
 the ring; batch size is not a substitute for backpressure monitoring.
 
+## Integrate with an application event loop
+
+Use `EventPoller` when the application already owns an event loop and should
+pull available ring events without dedicating a goroutine to `Run`:
+
+```go
+poller, err := disruptor.NewEventPoller(
+    ring,
+    ring.NewBarrier(),
+    handleEvent,
+    disruptor.WithMaxBatchSize(64),
+)
+if err != nil {
+    return err
+}
+ring.AddGatingSequences(poller.Sequence())
+
+for {
+    state, err := poller.Poll()
+    if err != nil {
+        return err
+    }
+    switch state {
+    case disruptor.PollIdle:
+        pollOtherSources()
+    case disruptor.PollGating:
+        pollOtherSources()
+    case disruptor.PollProcessing:
+        continue
+    }
+}
+```
+
+`Poll` is non-blocking. `PollIdle` means the producer has not advanced;
+`PollGating` means a publication gap or upstream dependency is preventing the
+next sequence from becoming consumable. The poller must be called by one loop,
+and its sequence should be registered as a gate. Handler failures leave the
+selected batch replayable, just like `BatchProcessor`.
+
 ## Shut down and cancel predictably
 
 Stop and join all publisher goroutines before calling `Shutdown`:

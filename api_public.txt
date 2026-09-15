@@ -3,6 +3,9 @@
 
 const InitialSequence int64 = -1
 const MultiProducer ProducerType = 1
+const PollGating PollState = 1
+const PollIdle PollState = 0
+const PollProcessing PollState = 2
 const ProducerWaitBlocking ProducerWaitMode = 1
 const ProducerWaitBusySpin ProducerWaitMode = 2
 const ProducerWaitYielding ProducerWaitMode = 0
@@ -20,6 +23,8 @@ func (p *BatchProcessor[T]) Halt()
 func (p *BatchProcessor[T]) Run(ctx context.Context) error
 func (p *BatchProcessor[T]) Running() bool
 func (p *BatchProcessor[T]) Sequence() *Sequence
+func (p *EventPoller[T]) Poll() (PollState, error)
+func (p *EventPoller[T]) Sequence() *Sequence
 func (r *RingBuffer[T]) AddGatingSequences(sequences ...*Sequence)
 func (r *RingBuffer[T]) BufferSize() int64
 func (r *RingBuffer[T]) Close()
@@ -49,6 +54,7 @@ func (s *Sequence) Store(value int64)
 func BlockingWait() WaitStrategy
 func BusySpinWait() WaitStrategy
 func NewBatchProcessor[T any](ring *RingBuffer[T], barrier *SequenceBarrier, handler EventHandler[T], options ...ProcessorOption) (*BatchProcessor[T], error)
+func NewEventPoller[T any](ring *RingBuffer[T], barrier *SequenceBarrier, handler EventHandler[T], options ...ProcessorOption) (*EventPoller[T], error)
 func NewSequence(initial int64) *Sequence
 func New[T any](size int64, producerType ProducerType, factory EventFactory[T], wait WaitStrategy, options ...RingOption) (*RingBuffer[T], error)
 func SleepingWait() WaitStrategy
@@ -66,6 +72,9 @@ type BusySpinWaitStrategy struct {
 }
 type EventFactory[T any] func() T
 type EventHandler[T any] func(event T, sequence int64, endOfBatch bool) error
+type EventPoller[T any] struct {
+	// unexported fields
+}
 type EventTranslator[T any] func(T, int64) error
 type HandlerError struct {
 	Sequence int64
@@ -75,6 +84,7 @@ type HandlerPanicError struct {
 	Sequence int64
 	Value any
 }
+type PollState uint8
 type ProcessorOption func(*processorConfig) error
 type ProducerType uint8
 type ProducerWaitMode uint8

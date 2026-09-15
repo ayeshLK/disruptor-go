@@ -35,11 +35,13 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - `cmd/apicheck`: dependency-free exported API snapshot checker.
 - `docs/migration-v1.md`: pre-v1 migration guidance.
 - `docs/production.md`: production topology and operational guide.
+- `poller.go`: non-blocking application-loop consumer.
+- `benchmark_poller_test.go`: poller processing and idle benchmarks.
 
 ## Current handoff state (2026-09-15)
 
-- `v0.3.0` is the latest published release. Its immutable tag points to
-  `6a651d79a3da9eee7a3638a9c434254f25aee09`.
+- `v0.4.0` is the latest published release. Its immutable tag points to
+  `81e38d8f13b4a05f62cd28ae9ee686f0a9e2de2b`.
 - PR #30 (`feat: establish v1 API compatibility contract`) is merged at
   `56c9032fd512e98d4affa801aaba82900fb05fc3`. It established the exported API
   baseline, compatibility contract, migration guide, and v1-capable release
@@ -48,14 +50,19 @@ third-party dependencies unless a dependency is clearly justified and approved.
   `b43c90ca350414c4a03ddf599cc959d48f18e37a`. It closes issue #9 and adds
   `PublishN` and `TryPublishN`.
 - PR #32 (`docs: add production usage guide`) is merged at
-  `7ad9f998afface508b487ac3465c3aac36c8b283` and closes issue #16. The
-  production guide is now part of `main`.
+  `7ad9f998afface508b487ac3465c3aac36c8b283` and closes issue #16. PR #33
+  recorded the focused benchmark refresh at
+  `190c0dbdfa0388c38557cb5cf06c670805e98551`.
 - No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
   event poller), #17 (v1 release validation), and #18 (release-readiness
   tracker).
-- `BENCHMARKS.md` contains a focused batch-publication API refresh dated
-  2026-09-15, measured from `7ad9f99`. A full canonical run exceeded the local
-  ten-minute limit before completion and is intentionally not recorded.
+- Issue #10 is implemented on this branch at `3521cf6`; PR #35 is open with
+  the poller API, benchmark entry, and synchronized handoff context. These
+  changes are not part of `main` until the PR is merged.
+- `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
+  dated 2026-09-15. The poller entry is measured from `3521cf6`. A full
+  canonical run exceeded the local ten-minute limit before completion and is
+  intentionally not recorded.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 
@@ -89,6 +96,10 @@ Treat these as design constraints, not implementation details:
 - `PublishN` and `TryPublishN` validate before claiming, stop translation at the
   first error, and publish the complete claimed range on error or panic. Events
   after a partial translation must therefore be safe for consumers to observe.
+- `EventPoller.Poll` never waits. It reports idle or gating state without
+  advancing its sequence, and advances only after the selected batch succeeds;
+  handler failure or panic leaves the batch replayable. Register its sequence as
+  a gate when the poller owns ring capacity.
 - Events must not be retained or mutated after a consumer advances its sequence.
 - Context cancellation, `Halt`, barrier alerts, and `Close` must unblock waiters.
   Close is immediate rather than draining: visible events remain readable, while

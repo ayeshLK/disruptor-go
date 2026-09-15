@@ -18,7 +18,8 @@
 // Producers claim a sequence, mutate its preallocated event, and publish the
 // sequence. Consumers wait through a SequenceBarrier, process available events
 // in batches, and advance their own Sequence. The slowest registered gating
-// sequence prevents producers from overwriting unread entries.
+// sequence prevents producers from overwriting unread entries. EventPoller
+// provides the same sequence-aware consumption for application-controlled loops.
 //
 // The repository's production guide covers topology assembly, ring sizing,
 // ownership, lifecycle, and operational validation.

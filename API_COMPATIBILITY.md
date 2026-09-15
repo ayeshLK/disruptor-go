@@ -35,7 +35,7 @@ long-term role.
 | `New`, `NewSequence`, `NewBatchProcessor` | Supported constructors. |
 | `RingBuffer` claims, batch publication, discard, topology, and lifecycle methods | Supported application-facing API. |
 | `Sequence` and `SequenceBarrier` | Supported synchronization and dependency API; pointer ownership is required. |
-| `BatchProcessor`, `EventHandler`, `EventTranslator`, and processor options | Supported consumer API. |
+| `BatchProcessor`, `EventPoller`, `PollState`, `EventHandler`, `EventTranslator`, and processor options | Supported consumer API. |
 | `ProducerType`, producer-wait modes, ring options, and sentinel errors | Supported configuration and error vocabulary. |
 | Built-in wait-strategy types and constructors | Supported implementations; constructors are preferred over direct value construction. |
 | `Sequencer` | Retained as an advanced compatibility surface; see the decision below. |
@@ -87,6 +87,8 @@ be claimed and published by exactly one goroutine for its lifetime.
 - `PublishN` and `TryPublishN` translate contiguous batches using each
   event's logical sequence; a translation error or panic still resolves the
   complete claimed range.
+- `EventPoller` is a non-blocking, application-loop consumer. It must preserve
+  barrier gaps, dependency ordering, batch replay, and gating semantics.
 - `DiscardSequence` and `DiscardRange` resolve raw claims that will not be
   initialized; processors skip those claims while preserving sequence order.
 - `Close` stops waits immediately. `Shutdown` rejects new claims, drains the

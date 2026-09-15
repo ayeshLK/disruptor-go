@@ -154,6 +154,44 @@ baseline rather than an expected equality target. The wide single-producer
 batch-256 distribution reinforces that these local measurements should not be
 used as release thresholds.
 
+## Pull-based poller API refresh — 2026-09-15
+
+Measured from commit `3521cf6`, which adds the pull-based `EventPoller` API.
+This is a focused microbenchmark entry; processing cases include a successful
+`TryPublishN` followed by one poll, while the idle case measures polling with
+no available event. It is not a replacement for the canonical matrix. These
+are local development results, not portable guarantees or release thresholds.
+
+### Environment and command
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+```bash
+go test -run='^$' -bench='^BenchmarkEventPoller' -benchmem \\
+  -benchtime=1s -count=10
+```
+
+Values are minimum / median / maximum across ten sequential samples. Every case
+reported 0 B/op and 0 allocs/op.
+
+| Benchmark | ns/op min / median / max | Allocations |
+|---|---:|---:|
+| Poller, single, batch 1 | 31.46 / 32.11 / 33.09 | 0 / 0 |
+| Poller, single, batch 16 | 148.3 / 151.35 / 159.3 | 0 / 0 |
+| Poller, single, batch 256 | 1,903 / 1,962 / 2,080 | 0 / 0 |
+| Poller, multi, batch 1 | 49.97 / 51.295 / 52.57 | 0 / 0 |
+| Poller, multi, batch 16 | 358 / 368.95 / 418.1 | 0 / 0 |
+| Poller, multi, batch 256 | 5,724 / 5,780 / 6,407 | 0 / 0 |
+| Poller idle | 4.638 / 4.7405 / 4.899 | 0 / 0 |
+
+The poller steady-state paths are allocation-free. Processing values include
+producer work by design; the idle case isolates the no-event polling path.
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.
