@@ -64,6 +64,14 @@ third-party dependencies unless a dependency is clearly justified and approved.
   complete results were collected sequentially. The isolated MPSC rerun
   reproduced the higher batch-16 and batch-256 values; retain this as
   informational variance evidence, not a release threshold.
+- PR #36 (`docs: record repository benchmark sweep`) is open from branch
+  `docs/poller-benchmark-refresh`. Its latest commit is `128248c`; the branch
+  also contains `61b9ef8` and `8546b73`. It records the grouped full sweep and
+  controlled MPSC rerun; do not duplicate these entries after the PR merges.
+- This checkout's local `main` remains a stale divergent branch (`f49d3e0`, one
+  local commit ahead and three commits behind `origin/main`). Do not reset or
+  delete it to synchronize; fetch `origin/main` and create a fresh branch from
+  that ref for future work.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 
