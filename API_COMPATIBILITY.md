@@ -33,7 +33,7 @@ long-term role.
 | Surface | Decision |
 |---|---|
 | `New`, `NewSequence`, `NewBatchProcessor` | Supported constructors. |
-| `RingBuffer` claims, publication, discard, topology, and lifecycle methods | Supported application-facing API. |
+| `RingBuffer` claims, batch publication, discard, topology, and lifecycle methods | Supported application-facing API. |
 | `Sequence` and `SequenceBarrier` | Supported synchronization and dependency API; pointer ownership is required. |
 | `BatchProcessor`, `EventHandler`, `EventTranslator`, and processor options | Supported consumer API. |
 | `ProducerType`, producer-wait modes, ring options, and sentinel errors | Supported configuration and error vocabulary. |
@@ -84,6 +84,9 @@ be claimed and published by exactly one goroutine for its lifetime.
   later claims are already published.
 - `Publish` and `TryPublish` publish their claim even when translation returns
   an error, preventing a permanent publication gap.
+- `PublishN` and `TryPublishN` translate contiguous batches using each
+  event's logical sequence; a translation error or panic still resolves the
+  complete claimed range.
 - `DiscardSequence` and `DiscardRange` resolve raw claims that will not be
   initialized; processors skip those claims while preserving sequence order.
 - `Close` stops waits immediately. `Shutdown` rejects new claims, drains the

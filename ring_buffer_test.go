@@ -17,6 +17,7 @@ package disruptor
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -48,6 +49,202 @@ func TestNewValidatesConfiguration(t *testing.T) {
 	}
 	if _, err := New(8, ProducerType(99), func() *testEvent { return new(testEvent) }, BlockingWait()); !errors.Is(err, ErrInvalidProducerType) {
 		t.Fatalf("producer type: got %v", err)
+	}
+}
+
+func TestBatchPublishHelpersAcrossProducerModesAndWrap(t *testing.T) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		t.Run(producerName(producer), func(t *testing.T) {
+			ring := newTestRing(t, 4, producer, YieldingWait())
+			barrier := ring.NewBarrier()
+			var sequences []int64
+			translate := func(event *testEvent, sequence int64) error {
+				event.Value = sequence
+				sequences = append(sequences, sequence)
+				return nil
+			}
+
+			if err := ring.PublishN(context.Background(), 2, translate); err != nil {
+				t.Fatal(err)
+			}
+			if err := ring.TryPublishN(2, translate); err != nil {
+				t.Fatal(err)
+			}
+			if available, err := barrier.WaitFor(context.Background(), 3); err != nil || available != 3 {
+				t.Fatalf("available=%d err=%v", available, err)
+			}
+			if !reflect.DeepEqual(sequences, []int64{0, 1, 2, 3}) {
+				t.Fatalf("translated sequences: %v", sequences)
+			}
+			if ring.Get(0).Value != 0 || ring.Get(3).Value != 3 {
+				t.Fatalf("unexpected translated values: slot0=%d slot3=%d", ring.Get(0).Value, ring.Get(3).Value)
+			}
+
+			gate := NewSequence(1)
+			ring.AddGatingSequences(gate)
+			if err := ring.TryPublishN(2, translate); err != nil {
+				t.Fatal(err)
+			}
+			if ring.Cursor() != 5 {
+				t.Fatalf("wrapped cursor: %d", ring.Cursor())
+			}
+			if ring.Get(4).Value != 4 || ring.Get(5).Value != 5 {
+				t.Fatalf("unexpected wrapped values: slot0=%d slot1=%d", ring.Get(4).Value, ring.Get(5).Value)
+			}
+		})
+	}
+}
+
+func TestBatchPublishTranslationErrorResolvesCompleteRange(t *testing.T) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		for _, nonBlocking := range []bool{false, true} {
+			name := producerName(producer)
+			if nonBlocking {
+				name += "/try"
+			}
+			t.Run(name, func(t *testing.T) {
+				ring := newTestRing(t, 8, producer, YieldingWait())
+				want := errors.New("translate failed")
+				calls := 0
+				translate := func(_ *testEvent, sequence int64) error {
+					calls++
+					if sequence == 1 {
+						return want
+					}
+					return nil
+				}
+				var err error
+				if nonBlocking {
+					err = ring.TryPublishN(4, translate)
+				} else {
+					err = ring.PublishN(context.Background(), 4, translate)
+				}
+				if !errors.Is(err, want) {
+					t.Fatalf("translation error: %v", err)
+				}
+				if calls != 2 {
+					t.Fatalf("translator calls: %d", calls)
+				}
+				if available, waitErr := ring.NewBarrier().WaitFor(context.Background(), 3); waitErr != nil || available != 3 {
+					t.Fatalf("published range: available=%d err=%v", available, waitErr)
+				}
+			})
+		}
+	}
+}
+
+func TestBatchPublishPanicResolvesCompleteRange(t *testing.T) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		t.Run(producerName(producer), func(t *testing.T) {
+			ring := newTestRing(t, 8, producer, YieldingWait())
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Fatal("translator panic was not propagated")
+					}
+				}()
+				_ = ring.TryPublishN(4, func(_ *testEvent, sequence int64) error {
+					if sequence == 1 {
+						panic("translate panic")
+					}
+					return nil
+				})
+			}()
+			if available, err := ring.NewBarrier().WaitFor(context.Background(), 3); err != nil || available != 3 {
+				t.Fatalf("published range after panic: available=%d err=%v", available, err)
+			}
+		})
+	}
+}
+
+func TestBatchPublishValidatesBeforeClaiming(t *testing.T) {
+	ring := newTestRing(t, 4, SingleProducer, YieldingWait())
+	if err := ring.PublishN(context.Background(), 0, nil); !errors.Is(err, ErrNilTranslator) {
+		t.Fatalf("nil blocking translator: %v", err)
+	}
+	if err := ring.TryPublishN(0, nil); !errors.Is(err, ErrNilTranslator) {
+		t.Fatalf("nil non-blocking translator: %v", err)
+	}
+	if err := ring.PublishN(context.Background(), 0, func(*testEvent, int64) error { return nil }); !errors.Is(err, ErrInvalidClaimSize) {
+		t.Fatalf("invalid blocking count: %v", err)
+	}
+	if err := ring.TryPublishN(0, func(*testEvent, int64) error { return nil }); !errors.Is(err, ErrInvalidClaimSize) {
+		t.Fatalf("invalid non-blocking count: %v", err)
+	}
+	if ring.Cursor() != InitialSequence {
+		t.Fatalf("validation claimed a sequence: %d", ring.Cursor())
+	}
+}
+
+func TestBatchPublishCapacityAndCancellation(t *testing.T) {
+	for _, producer := range []ProducerType{SingleProducer, MultiProducer} {
+		t.Run(producerName(producer), func(t *testing.T) {
+			ring := newTestRing(t, 2, producer, YieldingWait())
+			gate := NewSequence(InitialSequence)
+			ring.AddGatingSequences(gate)
+			if err := ring.TryPublishN(2, func(*testEvent, int64) error { return nil }); err != nil {
+				t.Fatal(err)
+			}
+			if err := ring.TryPublishN(1, func(*testEvent, int64) error { return nil }); !errors.Is(err, ErrInsufficientCapacity) {
+				t.Fatalf("backpressure: %v", err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			if err := ring.PublishN(ctx, 1, func(*testEvent, int64) error { return nil }); !errors.Is(err, context.Canceled) {
+				t.Fatalf("cancellation: %v", err)
+			}
+		})
+	}
+}
+
+func TestConcurrentMultiProducerBatchPublish(t *testing.T) {
+	const producers = 4
+	const batchesPerProducer = 100
+	const batchSize = 4
+	const total = producers * batchesPerProducer * batchSize
+
+	ring := newTestRing(t, 1024, MultiProducer, YieldingWait())
+	var handled atomic.Int64
+	var invalid atomic.Int64
+	processor, err := NewBatchProcessor(ring, ring.NewBarrier(), func(event *testEvent, sequence int64, _ bool) error {
+		if event.Check != sequence {
+			invalid.Add(1)
+		}
+		handled.Add(1)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ring.AddGatingSequences(processor.Sequence())
+	processorErr := make(chan error, 1)
+	go func() { processorErr <- processor.Run(context.Background()) }()
+
+	var publishers sync.WaitGroup
+	for range producers {
+		publishers.Go(func() {
+			for range batchesPerProducer {
+				if err := ring.PublishN(context.Background(), batchSize, func(event *testEvent, sequence int64) error {
+					event.Check = sequence
+					return nil
+				}); err != nil {
+					t.Errorf("batch publish: %v", err)
+					return
+				}
+			}
+		})
+	}
+	publishers.Wait()
+	waitForSequence(t, processor.Sequence(), total-1)
+	processor.Halt()
+	if err := <-processorErr; err != nil {
+		t.Fatal(err)
+	}
+	if got := handled.Load(); got != total {
+		t.Fatalf("handled %d, want %d", got, total)
+	}
+	if got := invalid.Load(); got != 0 {
+		t.Fatalf("invalid event identities: %d", got)
 	}
 }
 

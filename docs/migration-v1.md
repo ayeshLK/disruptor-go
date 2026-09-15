@@ -77,6 +77,24 @@ API provides a pointer type.
 
 ## From v0.3.0
 
+### Batch translation and publication
+
+`PublishN` and `TryPublishN` provide the ergonomic equivalent of manually
+combining `NextN`/`TryNextN`, repeated translation, and `PublishRange`:
+
+```go
+err := ring.PublishN(ctx, 4, func(event *OrderEvent, sequence int64) error {
+	event.OrderID = nextOrderID(sequence)
+	return nil
+})
+```
+
+They pass each logical sequence to the existing `EventTranslator` contract.
+Translation stops at the first error, but the entire claimed range is still
+published; a panic also resolves the range before propagating. Code that needs
+to avoid publishing partially initialized events should use raw claims and
+explicitly publish or discard each resolved range instead.
+
 ### Raw claim abandonment
 
 Raw claims that cannot be initialized must be resolved explicitly:
