@@ -20,7 +20,8 @@ import (
 )
 
 // SequenceBarrier coordinates a consumer with the producer cursor and optional
-// upstream consumer sequences.
+// upstream consumer sequences. A SequenceBarrier must not be copied after first
+// use; pass it by pointer.
 type SequenceBarrier struct {
 	sequencer Sequencer
 	wait      WaitStrategy

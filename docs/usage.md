@@ -2,7 +2,9 @@
 
 This guide covers the protocol details that matter when building a production
 pipeline with `lib-disruptor`. For the first runnable ring, start with the
-[README](../README.md#quick-start).
+[README](../README.md#quick-start). For compatibility guarantees and upgrade
+notes, see the [API compatibility contract](../API_COMPATIBILITY.md) and
+[pre-v1 migration guide](migration-v1.md).
 
 ## Event lifetime and publication
 

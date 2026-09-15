@@ -18,7 +18,10 @@ channel-backed substitute.
 
 > [!IMPORTANT]
 > `lib-disruptor` is a pre-v1 module. Minor releases may include breaking
-> changes; review the [changelog](CHANGELOG.md) before upgrading.
+> changes; review the [changelog](CHANGELOG.md) and
+> [pre-v1 migration guide](docs/migration-v1.md) before upgrading. The planned
+> v1 compatibility contract is documented in
+> [API_COMPATIBILITY.md](API_COMPATIBILITY.md).
 
 ## Why use it?
 
@@ -36,7 +39,7 @@ replacement for Go channels.
 Requires Go 1.25 or newer.
 
 ```sh
-go get github.com/ayeshLK/lib-disruptor@v0.1.0
+go get github.com/ayeshLK/lib-disruptor@v0.3.0
 ```
 
 Import the root package as `disruptor`:

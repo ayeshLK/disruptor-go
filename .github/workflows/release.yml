@@ -34,8 +34,8 @@ jobs:
         shell: bash
         run: |
           VERSION="$(jq -er '.["."] | select(type == "string")' .release-please-manifest.json)"
-          if [[ ! "$VERSION" =~ ^0\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-            echo "Prepared release must be a valid v0 semantic version" >&2
+          if [[ ! "$VERSION" =~ ^[01]\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "Prepared release must be a valid v0 or v1 semantic version" >&2
             exit 1
           fi
           TAG="v$VERSION"

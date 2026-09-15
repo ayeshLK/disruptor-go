@@ -18,10 +18,13 @@ import "fmt"
 
 // HandlerError reports an error returned by an event handler.
 type HandlerError struct {
+	// Sequence is the first sequence in the failed batch.
 	Sequence int64
-	Err      error
+	// Err is the error returned by the handler.
+	Err error
 }
 
+// Error returns a sequence-aware description of the handler failure.
 func (e *HandlerError) Error() string {
 	return fmt.Sprintf("disruptor: handler failed at sequence %d: %v", e.Sequence, e.Err)
 }
@@ -31,10 +34,13 @@ func (e *HandlerError) Unwrap() error { return e.Err }
 
 // HandlerPanicError reports a panic recovered from an event handler.
 type HandlerPanicError struct {
+	// Sequence is the first sequence in the failed batch.
 	Sequence int64
-	Value    any
+	// Value is the value recovered from the handler panic.
+	Value any
 }
 
+// Error returns a sequence-aware description of the recovered panic.
 func (e *HandlerPanicError) Error() string {
 	return fmt.Sprintf("disruptor: handler panicked at sequence %d: %v", e.Sequence, e.Value)
 }
