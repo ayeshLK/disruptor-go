@@ -14,21 +14,26 @@
 
 package disruptor
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 type singleProducerSequencer struct {
 	*sequencerBase
-	nextValue    int64
-	cachedGate   int64
-	publications []publicationSlot
+	nextValue  int64
+	cachedGate int64
+	discarded  []atomic.Int64
 }
 
 func newSingleProducerSequencer(size int64, wait WaitStrategy, producerWait ProducerWaitMode) *singleProducerSequencer {
+	discarded := make([]atomic.Int64, size)
+	discardMarker(discarded)
 	return &singleProducerSequencer{
 		sequencerBase: newSequencerBase(size, wait, producerWait),
 		nextValue:     InitialSequence,
 		cachedGate:    InitialSequence,
-		publications:  make([]publicationSlot, size),
+		discarded:     discarded,
 	}
 }
 
@@ -49,7 +54,6 @@ func (s *singleProducerSequencer) Next(ctx context.Context, count int64) (int64,
 		s.cachedGate = minimum
 	}
 	s.nextValue = next
-	s.prepare(next-count+1, next)
 	return next, nil
 }
 
@@ -70,47 +74,44 @@ func (s *singleProducerSequencer) TryNext(count int64) (int64, error) {
 		}
 	}
 	s.nextValue = next
-	s.prepare(next-count+1, next)
 	return next, nil
 }
 
-func (s *singleProducerSequencer) Publish(low, high int64) {
-	s.resolve(low, high, publicationPublished)
-	s.advanceCursor(high)
+func (s *singleProducerSequencer) Publish(_, high int64) {
+	s.cursor.store(high)
 	s.wait.signalAll()
 }
 
 func (s *singleProducerSequencer) Discard(low, high int64) {
-	s.resolve(low, high, publicationDiscarded)
-	s.advanceCursor(high)
+	if low > high {
+		return
+	}
+	for sequence := low; ; sequence++ {
+		if sequence > s.cursor.Load() {
+			s.discarded[s.index(sequence)].Store(sequence)
+			s.cursor.store(sequence)
+		}
+		if sequence == high {
+			break
+		}
+	}
 	s.wait.signalAll()
 }
 
 func (s *singleProducerSequencer) IsAvailable(sequence int64) bool {
 	cursor := s.cursor.Load()
-	if sequence > cursor || sequence <= cursor-s.bufferSize {
-		return false
-	}
-	return s.resolution(sequence) != publicationUnresolved
+	return sequence <= cursor && sequence > cursor-s.bufferSize
 }
 
 func (s *singleProducerSequencer) IsDiscarded(sequence int64) bool {
-	return s.resolution(sequence) == publicationDiscarded
+	cursor := s.cursor.Load()
+	if sequence > cursor || sequence <= cursor-s.bufferSize {
+		return false
+	}
+	return s.discarded[s.index(sequence)].Load() == sequence
 }
 
-func (s *singleProducerSequencer) HighestPublished(lower, available int64) int64 {
-	if lower > available {
-		return available
-	}
-	for sequence := lower; ; sequence++ {
-		if s.resolution(sequence) == publicationUnresolved {
-			return sequence - 1
-		}
-		if sequence == available {
-			return available
-		}
-	}
-}
+func (*singleProducerSequencer) HighestPublished(_ int64, available int64) int64 { return available }
 
 func (s *singleProducerSequencer) RemainingCapacity() int64 {
 	consumed := s.minimumGate(s.nextValue)
@@ -123,45 +124,8 @@ func (s *singleProducerSequencer) NewBarrier(dependencies ...*Sequence) *Sequenc
 	return barrier
 }
 
-func (s *singleProducerSequencer) prepare(low, high int64) {
-	if low > high {
-		return
-	}
-	for sequence := low; ; sequence++ {
-		slot := &s.publications[s.index(sequence)]
-		preparePublication(&slot.marker, &slot.state, sequence)
-		if sequence == high {
-			return
-		}
-	}
-}
-
-func (s *singleProducerSequencer) resolve(low, high int64, resolution uint32) {
-	if low > high {
-		return
-	}
-	for sequence := low; ; sequence++ {
-		slot := &s.publications[s.index(sequence)]
-		resolvePublication(&slot.marker, &slot.state, sequence, resolution)
-		if sequence == high {
-			return
-		}
-	}
-}
-
-func (s *singleProducerSequencer) resolution(sequence int64) uint32 {
-	slot := &s.publications[s.index(sequence)]
-	return publicationState(&slot.marker, &slot.state, sequence)
-}
-
 func (s *singleProducerSequencer) index(sequence int64) int {
 	return int(uint64(sequence) & uint64(s.bufferSize-1))
-}
-
-func (s *singleProducerSequencer) advanceCursor(sequence int64) {
-	if sequence > s.cursor.Load() {
-		s.cursor.store(sequence)
-	}
 }
 
 func (s *singleProducerSequencer) Shutdown(ctx context.Context) error {

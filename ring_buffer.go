@@ -14,7 +14,10 @@
 
 package disruptor
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 // EventFactory creates one reusable event for each physical ring slot.
 type EventFactory[T any] func() T
@@ -32,6 +35,7 @@ type RingBuffer[T any] struct {
 	indexMask uint64
 	sequencer Sequencer
 	discarder discardSequencer
+	discarded atomic.Bool
 }
 
 // New creates a ring buffer with preallocated events and the selected producer mode.
@@ -106,6 +110,7 @@ func (r *RingBuffer[T]) PublishRange(low, high int64) {
 // processors. Duplicate resolution calls are ignored; the first terminal
 // resolution wins.
 func (r *RingBuffer[T]) DiscardSequence(sequence int64) {
+	r.discarded.Store(true)
 	r.discarder.Discard(sequence, sequence)
 }
 
@@ -113,6 +118,7 @@ func (r *RingBuffer[T]) DiscardSequence(sequence int64) {
 // delivering their events to processors. Duplicate resolution calls are
 // ignored; the first terminal resolution wins.
 func (r *RingBuffer[T]) DiscardRange(low, high int64) {
+	r.discarded.Store(true)
 	r.discarder.Discard(low, high)
 }
 
@@ -121,6 +127,10 @@ func (r *RingBuffer[T]) DiscardRange(low, high int64) {
 // BatchProcessor handlers.
 func (r *RingBuffer[T]) IsDiscarded(sequence int64) bool {
 	return r.discarder.IsDiscarded(sequence)
+}
+
+func (r *RingBuffer[T]) hasDiscardedClaims() bool {
+	return r.discarded.Load()
 }
 
 // Publish claims one sequence, invokes translator on its preallocated event,

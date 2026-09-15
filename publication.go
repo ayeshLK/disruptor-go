@@ -16,36 +16,18 @@ package disruptor
 
 import "sync/atomic"
 
-type publicationSlot struct {
-	marker atomic.Int64
-	state  atomic.Uint32
-}
-
 const (
 	publicationUnresolved uint32 = iota
 	publicationPublished
 	publicationDiscarded
-	publicationPreparing
 )
 
-func preparePublication(marker *atomic.Int64, state *atomic.Uint32, value int64) {
-	state.Store(publicationPreparing)
-	marker.Store(value)
-	state.Store(publicationUnresolved)
+func publicationValue(flag int64, state uint32) int64 {
+	return int64(uint64(flag)<<2 | uint64(state))
 }
 
-func resolvePublication(marker *atomic.Int64, state *atomic.Uint32, value int64, resolution uint32) bool {
-	if state.Load() != publicationUnresolved || marker.Load() != value {
-		return false
+func discardMarker(slots []atomic.Int64) {
+	for index := range slots {
+		slots[index].Store(InitialSequence)
 	}
-	return state.CompareAndSwap(publicationUnresolved, resolution)
-}
-
-func publicationState(marker *atomic.Int64, state *atomic.Uint32, value int64) uint32 {
-	markerValue := marker.Load()
-	resolved := state.Load()
-	if resolved == publicationUnresolved || resolved == publicationPreparing || markerValue != value {
-		return publicationUnresolved
-	}
-	return resolved
 }

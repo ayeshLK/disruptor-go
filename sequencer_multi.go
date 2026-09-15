@@ -24,7 +24,6 @@ type multiProducerSequencer struct {
 	*sequencerBase
 	gateCache  *Sequence
 	available  []atomic.Int64
-	states     []atomic.Uint32
 	indexMask  uint64
 	indexShift uint
 }
@@ -38,7 +37,6 @@ func newMultiProducerSequencer(size int64, wait WaitStrategy, producerWait Produ
 		sequencerBase: newSequencerBase(size, wait, producerWait),
 		gateCache:     NewSequence(InitialSequence),
 		available:     available,
-		states:        make([]atomic.Uint32, size),
 		indexMask:     uint64(size - 1),
 		indexShift:    uint(bits.TrailingZeros64(uint64(size))),
 	}
@@ -150,7 +148,7 @@ func (s *multiProducerSequencer) prepare(low, high int64) {
 	}
 	for sequence := low; ; sequence++ {
 		index := s.index(sequence)
-		preparePublication(&s.available[index], &s.states[index], s.flag(sequence))
+		s.available[index].Store(publicationValue(s.flag(sequence), publicationUnresolved))
 		if sequence == high {
 			return
 		}
@@ -163,7 +161,11 @@ func (s *multiProducerSequencer) resolve(low, high int64, resolution uint32) {
 	}
 	for sequence := low; ; sequence++ {
 		index := s.index(sequence)
-		resolvePublication(&s.available[index], &s.states[index], s.flag(sequence), resolution)
+		flag := s.flag(sequence)
+		s.available[index].CompareAndSwap(
+			publicationValue(flag, publicationUnresolved),
+			publicationValue(flag, resolution),
+		)
 		if sequence == high {
 			return
 		}
@@ -171,8 +173,15 @@ func (s *multiProducerSequencer) resolve(low, high int64, resolution uint32) {
 }
 
 func (s *multiProducerSequencer) resolution(sequence int64) uint32 {
-	index := s.index(sequence)
-	return publicationState(&s.available[index], &s.states[index], s.flag(sequence))
+	flag := s.flag(sequence)
+	value := s.available[s.index(sequence)].Load()
+	if value == publicationValue(flag, publicationPublished) {
+		return publicationPublished
+	}
+	if value == publicationValue(flag, publicationDiscarded) {
+		return publicationDiscarded
+	}
+	return publicationUnresolved
 }
 
 func (s *multiProducerSequencer) Shutdown(ctx context.Context) error {

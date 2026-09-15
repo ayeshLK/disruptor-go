@@ -115,16 +115,24 @@ func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 		if available-next+1 > p.maxBatchSize {
 			end = next + p.maxBatchSize - 1
 		}
-		lastDelivered := end
-		for lastDelivered >= next && p.ring.IsDiscarded(lastDelivered) {
-			lastDelivered--
-		}
-		for sequence := next; sequence <= end; sequence++ {
-			if p.ring.IsDiscarded(sequence) {
-				continue
+		if !p.ring.hasDiscardedClaims() {
+			for sequence := next; sequence <= end; sequence++ {
+				if err := p.handle(sequence, sequence == end); err != nil {
+					return err
+				}
 			}
-			if err := p.handle(sequence, sequence == lastDelivered); err != nil {
-				return err
+		} else {
+			lastDelivered := end
+			for lastDelivered >= next && p.ring.IsDiscarded(lastDelivered) {
+				lastDelivered--
+			}
+			for sequence := next; sequence <= end; sequence++ {
+				if p.ring.IsDiscarded(sequence) {
+					continue
+				}
+				if err := p.handle(sequence, sequence == lastDelivered); err != nil {
+					return err
+				}
 			}
 		}
 		p.sequence.Store(end)
