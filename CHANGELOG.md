@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.2.0...v0.3.0) (2026-09-15)
+
+
+### Features
+
+* add raw claim abandonment ([#28](https://github.com/ayeshLK/lib-disruptor/issues/28)) ([2d975aa](https://github.com/ayeshLK/lib-disruptor/commit/2d975aad1891aa7ad62f040a12e7d4cc4afadb61))
+
 ## [0.2.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.1.0...v0.2.0) (2026-09-12)
 
 
