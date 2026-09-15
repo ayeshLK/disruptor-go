@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.4.0...v0.5.0) (2026-09-15)
+
+
+### Features
+
+* add pull-based event poller ([#35](https://github.com/ayeshLK/lib-disruptor/issues/35)) ([6910ef1](https://github.com/ayeshLK/lib-disruptor/commit/6910ef195f85fba50f3913149c7b7f4f1124cada)), closes [#10](https://github.com/ayeshLK/lib-disruptor/issues/10)
+
 ## [0.4.0](https://github.com/ayeshLK/lib-disruptor/compare/v0.3.0...v0.4.0) (2026-09-15)
 
 
