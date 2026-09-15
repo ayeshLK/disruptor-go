@@ -129,6 +129,19 @@ compatibility commitment. New applications should use `RingBuffer`; code that
 implements `Sequencer` must track interface changes as part of each pre-v1
 upgrade.
 
+## From v0.4.0
+
+### Pull-based consumption
+
+`EventPoller` provides a non-blocking consumer for applications that already
+own an event loop. It returns `PollIdle`, `PollGating`, or `PollProcessing` and
+shares the batch, dependency, error, replay, and gating semantics of
+`BatchProcessor` without owning a goroutine. Register `poller.Sequence()` as a
+gating sequence before publishing.
+
+Applications that already use `BatchProcessor` do not need to migrate; the
+poller is an additional integration API rather than a replacement.
+
 ## Before v1.0.0
 
 Before adopting v1, review the committed exported API snapshot and the

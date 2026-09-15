@@ -25,7 +25,7 @@ type EventHandler[T any] func(event T, sequence int64, endOfBatch bool) error
 
 type processorConfig struct{ maxBatchSize int64 }
 
-// ProcessorOption configures a BatchProcessor.
+// ProcessorOption configures a BatchProcessor or EventPoller.
 type ProcessorOption func(*processorConfig) error
 
 // WithMaxBatchSize limits the number of events acknowledged as one batch.
@@ -116,38 +116,46 @@ func (p *BatchProcessor[T]) Run(ctx context.Context) error {
 		if available-next+1 > p.maxBatchSize {
 			end = next + p.maxBatchSize - 1
 		}
-		if !p.ring.hasDiscardedClaims() {
-			for sequence := next; sequence <= end; sequence++ {
-				if err := p.handle(sequence, sequence == end); err != nil {
-					return err
-				}
-			}
-		} else {
-			lastDelivered := end
-			for lastDelivered >= next && p.ring.IsDiscarded(lastDelivered) {
-				lastDelivered--
-			}
-			for sequence := next; sequence <= end; sequence++ {
-				if p.ring.IsDiscarded(sequence) {
-					continue
-				}
-				if err := p.handle(sequence, sequence == lastDelivered); err != nil {
-					return err
-				}
-			}
+		if err := processBatch(p.ring, p.handler, next, end); err != nil {
+			return err
 		}
 		p.sequence.Store(end)
 		next = end + 1
 	}
 }
 
-func (p *BatchProcessor[T]) handle(sequence int64, endOfBatch bool) (err error) {
+func processBatch[T any](ring *RingBuffer[T], handler EventHandler[T], next, end int64) error {
+	if !ring.hasDiscardedClaims() {
+		for sequence := next; sequence <= end; sequence++ {
+			if err := handleEvent(ring, handler, sequence, sequence == end); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	lastDelivered := end
+	for lastDelivered >= next && ring.IsDiscarded(lastDelivered) {
+		lastDelivered--
+	}
+	for sequence := next; sequence <= end; sequence++ {
+		if ring.IsDiscarded(sequence) {
+			continue
+		}
+		if err := handleEvent(ring, handler, sequence, sequence == lastDelivered); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func handleEvent[T any](ring *RingBuffer[T], handler EventHandler[T], sequence int64, endOfBatch bool) (err error) {
 	defer func() {
 		if value := recover(); value != nil {
 			err = &HandlerPanicError{Sequence: sequence, Value: value}
 		}
 	}()
-	if err := p.handler(p.ring.Get(sequence), sequence, endOfBatch); err != nil {
+	if err := handler(ring.Get(sequence), sequence, endOfBatch); err != nil {
 		return &HandlerError{Sequence: sequence, Err: err}
 	}
 	return nil

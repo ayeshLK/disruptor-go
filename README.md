@@ -28,6 +28,7 @@ channel-backed substitute.
 - Reuse factory-allocated events instead of allocating on every handoff.
 - Choose single-producer or CAS-based multi-producer publication.
 - Build broadcast and staged consumer pipelines with explicit gating.
+- Integrate consumers into an existing event loop with a pull-based poller.
 - Select consumer and producer waiting policies for your latency and CPU budget.
 
 This library is for in-process, performance-sensitive event processing. It is
@@ -140,6 +141,8 @@ events.
   waits, graph setup, shutdown, error handling, and event-ownership rules.
 - Read the [production guide](docs/production.md) for sizing, topology recipes,
   lifecycle operations, and common mistakes.
+- Use `EventPoller` when an application-controlled loop should pull available
+  events without dedicating a consumer goroutine.
 - Browse the [API reference](https://pkg.go.dev/github.com/ayeshLK/lib-disruptor)
   for the complete public contract.
 - See [PERFORMANCE.md](PERFORMANCE.md) for the measurement model and

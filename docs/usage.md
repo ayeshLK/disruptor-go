@@ -107,6 +107,43 @@ By design, `Publish` and `TryPublish` publish their claimed sequence even when
 the translator returns an error, preventing a visibility gap without requiring a
 separate discard.
 
+## Pull-based consumption
+
+`EventPoller` integrates the ring with an application-controlled event loop. It
+never waits and returns `PollIdle` when the producer has no new sequence,
+`PollGating` when a publication gap or upstream dependency blocks progress, and
+`PollProcessing` after a batch is acknowledged:
+
+```go
+poller, err := disruptor.NewEventPoller(
+    ring,
+    ring.NewBarrier(),
+    handleEvent,
+    disruptor.WithMaxBatchSize(64),
+)
+if err != nil {
+    return err
+}
+ring.AddGatingSequences(poller.Sequence())
+
+for {
+    state, err := poller.Poll()
+    if err != nil {
+        return err
+    }
+    if state == disruptor.PollIdle {
+        pollOtherSources()
+    }
+}
+```
+
+A poller is intended to be called by one application-controlled loop rather than
+concurrently. Its sequence advances only after the selected batch succeeds;
+handler errors and recovered panics leave that batch replayable and return
+`HandlerError` or `HandlerPanicError`. Visible events can still be polled after
+`Close`; once no visible event remains, `Poll` returns `ErrClosed`. Alerts return
+`ErrAlerted` and can be cleared through the poller's barrier.
+
 ## Producer capacity waits
 
 Consumer wait strategies and producer capacity waiting are independent. The
