@@ -42,8 +42,9 @@ func resolvePublication(marker *atomic.Int64, state *atomic.Uint32, value int64,
 }
 
 func publicationState(marker *atomic.Int64, state *atomic.Uint32, value int64) uint32 {
+	markerValue := marker.Load()
 	resolved := state.Load()
-	if resolved == publicationUnresolved || resolved == publicationPreparing || marker.Load() != value {
+	if resolved == publicationUnresolved || resolved == publicationPreparing || markerValue != value {
 		return publicationUnresolved
 	}
 	return resolved
