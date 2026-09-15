@@ -192,6 +192,46 @@ reported 0 B/op and 0 allocs/op.
 The poller steady-state paths are allocation-free. Processing values include
 producer work by design; the idle case isolates the no-event polling path.
 
+## Post-merge poller API refresh — 2026-09-15
+
+Measured from merged commit `6910ef1` (`feat: add pull-based event poller
+(#35)`) on `origin/main`. This repeats the focused poller benchmark after the
+API landed on the main branch; it does not replace either the earlier poller
+entry or the canonical matrix. These are local development results, not
+portable guarantees or release thresholds.
+
+### Environment and command
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+```bash
+go test -run='^$' -bench='^BenchmarkEventPoller' -benchmem \\
+  -benchtime=1s -count=10
+```
+
+Values are minimum / median / maximum across ten sequential samples. Every case
+reported 0 B/op and 0 allocs/op.
+
+| Benchmark | ns/op min / median / max | Allocations |
+|---|---:|---:|
+| Poller, single, batch 1 | 32.75 / 34.215 / 42.38 | 0 / 0 |
+| Poller, single, batch 16 | 148.4 / 152.95 / 171.2 | 0 / 0 |
+| Poller, single, batch 256 | 1,920 / 2,048.5 / 2,809 | 0 / 0 |
+| Poller, multi, batch 1 | 51.49 / 57.23 / 61.01 | 0 / 0 |
+| Poller, multi, batch 16 | 352.8 / 357.15 / 372.3 | 0 / 0 |
+| Poller, multi, batch 256 | 5,186 / 5,211.5 / 5,943 | 0 / 0 |
+| Poller idle | 4.179 / 4.288 / 4.386 | 0 / 0 |
+
+The post-merge run confirms allocation-free processing and idle paths. The
+wider single-producer batch-256 and multi-producer batch-1 ranges show ordinary
+scheduler and host-load variance; neither run should be treated as a release
+threshold.
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.

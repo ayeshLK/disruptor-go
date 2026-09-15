@@ -53,16 +53,13 @@ third-party dependencies unless a dependency is clearly justified and approved.
   `7ad9f998afface508b487ac3465c3aac36c8b283` and closes issue #16. PR #33
   recorded the focused benchmark refresh at
   `190c0dbdfa0388c38557cb5cf06c670805e98551`.
-- No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
-  event poller), #17 (v1 release validation), and #18 (release-readiness
-  tracker).
-- Issue #10 is implemented on this branch at `3521cf6`; PR #35 is open with
-  the poller API, benchmark entry, and synchronized handoff context. These
-  changes are not part of `main` until the PR is merged.
+- No P1 issues remain open. The remaining open P2 issues are #17 (v1 release
+  validation) and #18 (release-readiness tracker); issue #10 was merged through
+  PR #35 at `6910ef1`.
 - `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
-  dated 2026-09-15. The poller entry is measured from `3521cf6`. A full
-  canonical run exceeded the local ten-minute limit before completion and is
-  intentionally not recorded.
+  dated 2026-09-15. The post-merge poller entry is measured from `6910ef1`. A
+  full canonical run exceeded the local ten-minute limit before completion and
+  is intentionally not recorded.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 
