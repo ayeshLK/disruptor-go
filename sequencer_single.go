@@ -14,19 +14,26 @@
 
 package disruptor
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 type singleProducerSequencer struct {
 	*sequencerBase
 	nextValue  int64
 	cachedGate int64
+	discarded  []atomic.Int64
 }
 
 func newSingleProducerSequencer(size int64, wait WaitStrategy, producerWait ProducerWaitMode) *singleProducerSequencer {
+	discarded := make([]atomic.Int64, size)
+	discardMarker(discarded)
 	return &singleProducerSequencer{
 		sequencerBase: newSequencerBase(size, wait, producerWait),
 		nextValue:     InitialSequence,
 		cachedGate:    InitialSequence,
+		discarded:     discarded,
 	}
 }
 
@@ -75,9 +82,33 @@ func (s *singleProducerSequencer) Publish(_, high int64) {
 	s.wait.signalAll()
 }
 
+func (s *singleProducerSequencer) Discard(low, high int64) {
+	if low > high {
+		return
+	}
+	for sequence := low; ; sequence++ {
+		if sequence > s.cursor.Load() {
+			s.discarded[s.index(sequence)].Store(sequence)
+			s.cursor.store(sequence)
+		}
+		if sequence == high {
+			break
+		}
+	}
+	s.wait.signalAll()
+}
+
 func (s *singleProducerSequencer) IsAvailable(sequence int64) bool {
 	cursor := s.cursor.Load()
 	return sequence <= cursor && sequence > cursor-s.bufferSize
+}
+
+func (s *singleProducerSequencer) IsDiscarded(sequence int64) bool {
+	cursor := s.cursor.Load()
+	if sequence > cursor || sequence <= cursor-s.bufferSize {
+		return false
+	}
+	return s.discarded[s.index(sequence)].Load() == sequence
 }
 
 func (*singleProducerSequencer) HighestPublished(_ int64, available int64) int64 { return available }
@@ -91,6 +122,10 @@ func (s *singleProducerSequencer) NewBarrier(dependencies ...*Sequence) *Sequenc
 	barrier := s.sequencerBase.NewBarrier(dependencies...)
 	barrier.sequencer = s
 	return barrier
+}
+
+func (s *singleProducerSequencer) index(sequence int64) int {
+	return int(uint64(sequence) & uint64(s.bufferSize-1))
 }
 
 func (s *singleProducerSequencer) Shutdown(ctx context.Context) error {

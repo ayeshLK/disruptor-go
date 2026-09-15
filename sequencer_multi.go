@@ -66,6 +66,7 @@ func (s *multiProducerSequencer) Next(ctx context.Context, count int64) (int64, 
 			s.gateCache.store(minimum)
 		}
 		if s.cursor.compareAndSwap(current, next) {
+			s.prepare(current+1, next)
 			return next, nil
 		}
 	}
@@ -91,29 +92,42 @@ func (s *multiProducerSequencer) TryNext(count int64) (int64, error) {
 			}
 		}
 		if s.cursor.compareAndSwap(current, next) {
+			s.prepare(current+1, next)
 			return next, nil
 		}
 	}
 }
 
 func (s *multiProducerSequencer) Publish(low, high int64) {
-	for sequence := low; sequence <= high; sequence++ {
-		s.available[s.index(sequence)].Store(s.flag(sequence))
-	}
+	s.resolve(low, high, publicationPublished)
+	s.wait.signalAll()
+}
+
+func (s *multiProducerSequencer) Discard(low, high int64) {
+	s.resolve(low, high, publicationDiscarded)
 	s.wait.signalAll()
 }
 
 func (s *multiProducerSequencer) IsAvailable(sequence int64) bool {
-	return s.available[s.index(sequence)].Load() == s.flag(sequence)
+	return s.resolution(sequence) != publicationUnresolved
+}
+
+func (s *multiProducerSequencer) IsDiscarded(sequence int64) bool {
+	return s.resolution(sequence) == publicationDiscarded
 }
 
 func (s *multiProducerSequencer) HighestPublished(lower, available int64) int64 {
-	for sequence := lower; sequence <= available; sequence++ {
-		if !s.IsAvailable(sequence) {
+	if lower > available {
+		return available
+	}
+	for sequence := lower; ; sequence++ {
+		if s.resolution(sequence) == publicationUnresolved {
 			return sequence - 1
 		}
+		if sequence == available {
+			return available
+		}
 	}
-	return available
 }
 
 func (s *multiProducerSequencer) RemainingCapacity() int64 {
@@ -126,6 +140,48 @@ func (s *multiProducerSequencer) NewBarrier(dependencies ...*Sequence) *Sequence
 	barrier := s.sequencerBase.NewBarrier(dependencies...)
 	barrier.sequencer = s
 	return barrier
+}
+
+func (s *multiProducerSequencer) prepare(low, high int64) {
+	if low > high {
+		return
+	}
+	for sequence := low; ; sequence++ {
+		index := s.index(sequence)
+		s.available[index].Store(publicationValue(s.flag(sequence), publicationUnresolved))
+		if sequence == high {
+			return
+		}
+	}
+}
+
+func (s *multiProducerSequencer) resolve(low, high int64, resolution uint32) {
+	if low > high {
+		return
+	}
+	for sequence := low; ; sequence++ {
+		index := s.index(sequence)
+		flag := s.flag(sequence)
+		s.available[index].CompareAndSwap(
+			publicationValue(flag, publicationUnresolved),
+			publicationValue(flag, resolution),
+		)
+		if sequence == high {
+			return
+		}
+	}
+}
+
+func (s *multiProducerSequencer) resolution(sequence int64) uint32 {
+	flag := s.flag(sequence)
+	value := s.available[s.index(sequence)].Load()
+	if value == publicationValue(flag, publicationPublished) {
+		return publicationPublished
+	}
+	if value == publicationValue(flag, publicationDiscarded) {
+		return publicationDiscarded
+	}
+	return publicationUnresolved
 }
 
 func (s *multiProducerSequencer) Shutdown(ctx context.Context) error {

@@ -25,6 +25,81 @@ See `PERFORMANCE.md` for the canonical matrix, measurement separation, and
 regression policy. Add every new abbreviation, unit, percentile label, or
 throughput term to this legend when it first appears.
 
+## Claim-abandonment benchmark refresh — 2026-09-15
+
+Measured from clean commit `83f8811`. This is a microbenchmark-only refresh
+covering the claim-abandonment implementation and its optimized normal paths.
+These are local development results, not portable guarantees or release
+thresholds. No load-test throughput or sampled-latency runs were performed for
+this entry.
+
+### Environment and command
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+```bash
+go test -run='^$' -bench=. -benchmem -benchtime=1s -count=10
+```
+
+The tables summarize all ten sequential samples as minimum / median / maximum.
+All cases measured 0 B/op and 0 allocs/op except the blocking waits shown.
+
+### Microbenchmarks
+
+| Benchmark family | ns/op min / median / max | Allocations |
+|---|---:|---:|
+| Buffered channel broadcast-2 | 91.02 / 91.60 / 101.8 | 0 / 0 |
+| Buffered channel pipeline-2 | 88.95 / 91.94 / 113.5 | 0 / 0 |
+| Try claim/publish, single, batch 1 | 10.37 / 11.63 / 12.61 | 0 / 0 |
+| Try claim/publish, single, batch 16 | 1.386 / 1.502 / 1.801 | 0 / 0 |
+| Try claim/publish, single, batch 256 | 0.8297 / 0.8573 / 0.9488 | 0 / 0 |
+| Try claim/publish, multi, batch 1 | 30.26 / 32.72 / 35.15 | 0 / 0 |
+| Try claim/publish, multi, batch 16 | 16.24 / 16.93 / 20.78 | 0 / 0 |
+| Try claim/publish, multi, batch 256 | 15.21 / 15.48 / 15.96 | 0 / 0 |
+| Publication gap, multi-producer scan | 58.00 / 58.89 / 61.98 | 0 / 0 |
+| Try claim/discard, single | 22.99 / 23.39 / 24.78 | 0 / 0 |
+| Try claim/discard, multi | 33.76 / 34.41 / 34.69 | 0 / 0 |
+| Claim/publish, single, batch 1 | 14.00 / 14.43 / 15.61 | 0 / 0 |
+| Claim/publish, single, batch 16 | 1.762 / 1.825 / 1.995 | 0 / 0 |
+| Claim/publish, single, batch 256 | 1.007 / 1.014 / 1.031 | 0 / 0 |
+| Claim/publish, multi, batch 1 | 34.93 / 35.86 / 38.38 | 0 / 0 |
+| Claim/publish, multi, batch 16 | 16.12 / 16.29 / 16.44 | 0 / 0 |
+| Claim/publish, multi, batch 256 | 14.57 / 15.30 / 22.50 | 0 / 0 |
+| Topology, SPSC | 24.17 / 27.61 / 37.41 | 0 / 0 |
+| Topology, MPSC-2 | 95.56 / 105.15 / 119.7 | 0 / 0 |
+| Topology, MPSC-4 | 105.0 / 110.8 / 117.8 | 0 / 0 |
+| Topology, broadcast-2 | 30.73 / 35.54 / 64.55 | 0 / 0 |
+| Topology, pipeline-2 | 31.08 / 32.87 / 46.18 | 0 / 0 |
+| Consumer wait, blocking | 125.0 / 182.2 / 283.7 | 112 B/op / 1 alloc/op |
+| Consumer wait, sleeping | 24.84 / 30.70 / 33.20 | 0 / 0 |
+| Consumer wait, yielding | 24.93 / 27.86 / 33.81 | 0 / 0 |
+| Consumer wait, busy-spin | 29.12 / 33.25 / 34.13 | 0 / 0 |
+| Buffered channel MPSC | 72.36 / 73.62 / 78.95 | 0 / 0 |
+| Raw publish | 10.03 / 10.25 / 10.95 | 0 / 0 |
+| SPSC | 17.77 / 18.32 / 19.23 | 0 / 0 |
+| Buffered channel SPSC | 55.43 / 57.75 / 61.87 | 0 / 0 |
+| Producer wait, yielding | 1,518 / 1,604 / 1,698 | 0 / 0 |
+| Producer wait, blocking | 32,812 / 34,105 / 34,729 | 112 B/op / 1 alloc/op |
+| Producer wait, busy-spin | 481.2 / 498.3 / 510.7 | 0 / 0 |
+
+### Payload sensitivity
+
+| Scenario | ns/op min / median / max | payload MiB/s min / median / max | Allocations |
+|---|---:|---:|---:|
+| SPSC inline 16 B | 35.49 / 36.63 / 43.41 | 351.5 / 409.6 / 430.0 | 0 / 0 |
+| SPSC inline 256 B | 147.1 / 159.8 / 219.2 | 1,114 / 1,527.5 / 1,660 | 0 / 0 |
+| SPSC inline 4 KiB | 1,824 / 2,359.5 / 2,927 | 1,335 / 1,663 / 2,142 | 0 / 0 |
+| SPSC referenced 4 KiB | 1,985 / 2,104 / 2,855 | 1,368 / 1,858 / 1,968 | 0 / 0 |
+| MPSC inline 16 B | 101.4 / 106.25 / 129.1 | 118.2 / 143.6 / 150.5 | 0 / 0 |
+| MPSC inline 256 B | 188.6 / 194.75 / 205.0 | 1,191 / 1,253.5 / 1,294 | 0 / 0 |
+| MPSC inline 4 KiB | 2,731 / 2,824.5 / 2,939 | 1,329 / 1,383 / 1,431 | 0 / 0 |
+| MPSC referenced 4 KiB | 2,781 / 2,822.5 / 2,869 | 1,361 / 1,384 / 1,405 | 0 / 0 |
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.

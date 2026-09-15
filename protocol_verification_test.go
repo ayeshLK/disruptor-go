@@ -232,7 +232,8 @@ func TestBroadcastGatesProtectWrappedClaims(t *testing.T) {
 func TestSequenceBoundaryUsesRepresentableValues(t *testing.T) {
 	multi := newMultiProducerSequencer(4, YieldingWait(), ProducerWaitYielding)
 	for _, sequence := range []int64{maxSequenceValue - 1, maxSequenceValue} {
-		multi.available[multi.index(sequence)].Store(multi.flag(sequence))
+		index := multi.index(sequence)
+		multi.available[index].Store(publicationValue(multi.flag(sequence), publicationPublished))
 		if !multi.IsAvailable(sequence) {
 			t.Fatalf("sequence %d was not available at signed boundary", sequence)
 		}

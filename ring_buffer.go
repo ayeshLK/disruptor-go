@@ -14,7 +14,10 @@
 
 package disruptor
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 // EventFactory creates one reusable event for each physical ring slot.
 type EventFactory[T any] func() T
@@ -31,6 +34,8 @@ type RingBuffer[T any] struct {
 	entries   []T
 	indexMask uint64
 	sequencer Sequencer
+	discarder discardSequencer
+	discarded atomic.Bool
 }
 
 // New creates a ring buffer with preallocated events and the selected producer mode.
@@ -62,7 +67,7 @@ func New[T any](size int64, producerType ProducerType, factory EventFactory[T], 
 	default:
 		return nil, ErrInvalidProducerType
 	}
-	return &RingBuffer[T]{entries: entries, indexMask: uint64(size - 1), sequencer: sequencer}, nil
+	return &RingBuffer[T]{entries: entries, indexMask: uint64(size - 1), sequencer: sequencer, discarder: sequencer.(discardSequencer)}, nil
 }
 
 // Get returns the reusable event stored at sequence's physical ring slot.
@@ -88,14 +93,44 @@ func (r *RingBuffer[T]) TryNextN(count int64) (int64, error) {
 	return r.sequencer.TryNext(count)
 }
 
-// PublishSequence makes one claimed sequence visible to consumers.
+// PublishSequence makes one claimed sequence visible to consumers. Every
+// successful raw claim must be resolved by either publishing or discarding it.
 func (r *RingBuffer[T]) PublishSequence(sequence int64) {
 	r.sequencer.Publish(sequence, sequence)
 }
 
 // PublishRange makes every claimed sequence from low through high visible.
+// Every successful raw claim must be resolved by either publishing or
+// discarding it.
 func (r *RingBuffer[T]) PublishRange(low, high int64) {
 	r.sequencer.Publish(low, high)
+}
+
+// DiscardSequence resolves a claimed sequence without delivering its event to
+// processors. Duplicate resolution calls are ignored; the first terminal
+// resolution wins.
+func (r *RingBuffer[T]) DiscardSequence(sequence int64) {
+	r.discarded.Store(true)
+	r.discarder.Discard(sequence, sequence)
+}
+
+// DiscardRange resolves every claimed sequence from low through high without
+// delivering their events to processors. Duplicate resolution calls are
+// ignored; the first terminal resolution wins.
+func (r *RingBuffer[T]) DiscardRange(low, high int64) {
+	r.discarded.Store(true)
+	r.discarder.Discard(low, high)
+}
+
+// IsDiscarded reports whether sequence was resolved as discarded in its current
+// ring lap. Discarded sequences are visible to barriers but are skipped by
+// BatchProcessor handlers.
+func (r *RingBuffer[T]) IsDiscarded(sequence int64) bool {
+	return r.discarder.IsDiscarded(sequence)
+}
+
+func (r *RingBuffer[T]) hasDiscardedClaims() bool {
+	return r.discarded.Load()
 }
 
 // Publish claims one sequence, invokes translator on its preallocated event,

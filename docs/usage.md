@@ -48,10 +48,41 @@ for sequence := low; sequence <= high; sequence++ {
 ring.PublishRange(low, high)
 ```
 
-`TryNext` and `TryNextN` are the non-blocking counterparts. Claimed events must
-eventually be published; an unpublished claim can create a permanent visibility
-gap. By design, `Publish` and `TryPublish` publish their claimed sequence even
-when the translator returns an error, preventing this class of gap.
+`TryNext` and `TryNextN` are the non-blocking counterparts. Every successful
+raw claim must eventually be resolved with `PublishSequence`/`PublishRange` or
+`DiscardSequence`/`DiscardRange`, including claims abandoned after cancellation,
+application failure, or a panic. A discard acknowledges the logical sequence
+without delivering its event to processors:
+
+```go
+high, err := ring.NextN(ctx, 4)
+if err != nil {
+    return err
+}
+low := high - 3
+resolved := false
+defer func() {
+    if !resolved {
+        ring.DiscardRange(low, high)
+    }
+}()
+for sequence := low; sequence <= high; sequence++ {
+    ring.Get(sequence).OrderID = nextOrderID()
+}
+ring.PublishRange(low, high)
+resolved = true
+```
+
+`SequenceBarrier.WaitFor` advances across discarded sequences, while
+`IsDiscarded` identifies holes that raw consumers must skip. A discarded range
+is safe to wrap and does not expose stale slot data. `MultiProducer` claims may
+be resolved in any order; `SingleProducer` claim and resolution calls remain
+owned by one goroutine and should resolve in claim order. Duplicate resolution
+calls are ignored, and the first publish or discard wins.
+
+By design, `Publish` and `TryPublish` publish their claimed sequence even when
+the translator returns an error, preventing a visibility gap without requiring a
+separate discard.
 
 ## Producer capacity waits
 
