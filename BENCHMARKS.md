@@ -100,6 +100,60 @@ All cases measured 0 B/op and 0 allocs/op except the blocking waits shown.
 | MPSC inline 4 KiB | 2,731 / 2,824.5 / 2,939 | 1,329 / 1,383 / 1,431 | 0 / 0 |
 | MPSC referenced 4 KiB | 2,781 / 2,822.5 / 2,869 | 1,361 / 1,384 / 1,405 | 0 / 0 |
 
+## Batch publication API refresh — 2026-09-15
+
+Measured from clean commit `7ad9f998afface508b487ac3465c3aac36c8b283`, which
+includes the merged `PublishN` and `TryPublishN` API. This is a focused
+microbenchmark entry for the new helpers and their manual-range comparison; it
+is not a replacement for the canonical matrix. A separate full canonical run
+was attempted but exceeded the local ten-minute execution limit before
+completion and is not recorded here. These are local development results, not
+portable guarantees or release thresholds.
+
+### Environment and command
+
+- Time: `2026-09-15` (wall-clock start time was not recorded)
+- CPU: Intel Core i7-10510U, 4 cores / 8 logical CPUs
+- OS: Linux 7.0.0-31-generic x86_64
+- Go: 1.26.2 linux/amd64
+- GOMAXPROCS: 8
+- CPU governor: `powersave`
+
+```bash
+go test -run='^$' -bench='^(BenchmarkBatchPublishHelpers|BenchmarkManualTryPublishRange)$' \\
+  -benchmem -benchtime=1s -count=10
+```
+
+Values are minimum / median / maximum across ten sequential samples. Every case
+reported 0 B/op and 0 allocs/op.
+
+| Benchmark | ns/op min / median / max | Allocations |
+|---|---:|---:|
+| Batch helper, single, blocking, batch 1 | 16.5 / 17.305 / 18.83 | 0 / 0 |
+| Batch helper, single, try, batch 1 | 14.73 / 15.15 / 16.72 | 0 / 0 |
+| Batch helper, single, blocking, batch 16 | 38.8 / 42.8 / 45.93 | 0 / 0 |
+| Batch helper, single, try, batch 16 | 41.61 / 41.91 / 49.5 | 0 / 0 |
+| Batch helper, single, blocking, batch 256 | 500.9 / 629.65 / 697.7 | 0 / 0 |
+| Batch helper, single, try, batch 256 | 561.9 / 592.5 / 641.9 | 0 / 0 |
+| Batch helper, multi, blocking, batch 1 | 40.22 / 41.005 / 41.7 | 0 / 0 |
+| Batch helper, multi, try, batch 1 | 38.28 / 38.655 / 42.06 | 0 / 0 |
+| Batch helper, multi, blocking, batch 16 | 267 / 270.05 / 280.1 | 0 / 0 |
+| Batch helper, multi, try, batch 16 | 261.8 / 266.15 / 319.1 | 0 / 0 |
+| Batch helper, multi, blocking, batch 256 | 3,887 / 3,996 / 4,815 | 0 / 0 |
+| Batch helper, multi, try, batch 256 | 3,960 / 4,037.5 / 5,199 | 0 / 0 |
+| Manual range, single, try, batch 1 | 12.51 / 14.415 / 15.83 | 0 / 0 |
+| Manual range, single, try, batch 16 | 28.52 / 29.52 / 37.24 | 0 / 0 |
+| Manual range, single, try, batch 256 | 302.4 / 307.65 / 332.2 | 0 / 0 |
+| Manual range, multi, try, batch 1 | 32.34 / 33.665 / 34.84 | 0 / 0 |
+| Manual range, multi, try, batch 16 | 242.2 / 247 / 270.6 | 0 / 0 |
+| Manual range, multi, try, batch 256 | 3,690 / 3,808 / 4,181 | 0 / 0 |
+
+The helper path remains allocation-free. The helper includes translator callback
+invocation and range-resolution work, so the manual comparison is a lower-level
+baseline rather than an expected equality target. The wide single-producer
+batch-256 distribution reinforces that these local measurements should not be
+used as release thresholds.
+
 ## Full v1 refresh — 2026-09-12
 
 Measured from clean commit `0baae43e00268197d5072101709d35311f9e5490`.

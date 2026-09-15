@@ -47,11 +47,15 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - PR #31 (`feat: add batch publication helpers`) is merged at
   `b43c90ca350414c4a03ddf599cc959d48f18e37a`. It closes issue #9 and adds
   `PublishN` and `TryPublishN`.
-- PR #32 (`docs: add production usage guide`) is open for issue #16. Its local
-  implementation commit is `0ee3775`; it is not part of `main` until merged.
+- PR #32 (`docs: add production usage guide`) is merged at
+  `7ad9f998afface508b487ac3465c3aac36c8b283` and closes issue #16. The
+  production guide is now part of `main`.
 - No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
-  event poller), #16 (production guide, covered by PR #32), #17 (v1 release
-  validation), and #18 (release-readiness tracker).
+  event poller), #17 (v1 release validation), and #18 (release-readiness
+  tracker).
+- `BENCHMARKS.md` contains a focused batch-publication API refresh dated
+  2026-09-15, measured from `7ad9f99`. A full canonical run exceeded the local
+  ten-minute limit before completion and is intentionally not recorded.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 
