@@ -90,8 +90,9 @@ Prefer Go's typed atomics and documented synchronization semantics.
 - Every Go source file, including tests, examples, benchmarks, and commands, must
   begin with the Apache-2.0 header used by this repository: `Copyright 2026
   Ayesh Almeida`.
-- Do not silently broaden v0.1 scope into a topology DSL, worker pool, persistence,
-  CPU affinity, cross-process transport, or architecture-specific padding.
+- Do not silently broaden the project scope into a topology DSL, worker pool,
+  persistence, CPU affinity, cross-process transport, or architecture-specific
+  padding.
 
 ## Validation
 
@@ -99,9 +100,21 @@ Run the smallest relevant test while iterating, then before handing off a change
 
 ```bash
 gofmt -w <changed-go-files>
-go test ./...
+go build ./...
+go test -shuffle=on ./...
 go test -race ./...
 go vet ./...
+```
+
+Run one test with `go test . -run '^TestName$'` (or the relevant package path).
+Run one benchmark with `go test . -run '^$' -bench '^BenchmarkName$' -benchmem`.
+There is no separate linter; formatting, vet, tests, race detection, coverage,
+and source-header checks are the quality gates. `go mod tidy` must not leave a
+module-file diff, and the root package must maintain at least 85% coverage:
+
+```bash
+go test -covermode=atomic -coverprofile=coverage.out .
+go tool cover -func=coverage.out
 ```
 
 For concurrency-sensitive changes, repeat tests to expose timing failures:
@@ -123,6 +136,10 @@ Avoid timing-only assertions; use bounded timeouts only to prevent a deadlock
 from hanging the suite.
 
 ## Release workflow
+
+Use the normal pull-request workflow; direct pushes require explicit maintainer
+authorization. PR descriptions should state observable behavior, affected
+concurrency invariants, linked issues, and validation performed.
 
 Use Conventional Commit subjects for commits and squash-merge titles that reach
 `main`: `fix:` selects a patch release, `feat:` selects a minor release,
@@ -147,43 +164,6 @@ delete release tags, or bypass this lifecycle with `gh release create`.
 Keep third-party actions pinned to full commit SHAs and workflow permissions at
 least privilege. Do not create repositories, tags, releases, commits, pushes, or
 remote settings unless the user explicitly authorizes those external changes.
-
-## Current handoff state (2026-09-12)
-
-- `v0.1.0` is the current published release. The proposed v1 backlog is tracked
-  by issue #18.
-- PR #23 is merged on `main` at commit
-  `b3a4c3d6225ca3f7fc000f10503a927e16f3eb19`. It provides the versioned load
-  report, canonical benchmark matrix, payload sensitivity coverage, performance
-  strategy, and informational artifact workflow for issue #15.
-- PR #24 subsequently recorded that v1 baseline on `main` at commit
-  `42721e7`. The performance-report worktree changes described above are no
-  longer pending.
-- `main` includes commit `5da5b43` (`docs: streamline project onboarding`),
-  which reorganizes the README around adoption, adds `docs/usage.md` for the
-  advanced protocol contract, and links the two paths together. The public
-  GitHub repository description is: “A generic, dependency-free Go
-  implementation of the LMAX Disruptor protocol for bounded, ordered event
-  pipelines.” Topics remain unchanged and the homepage is intentionally unset.
-- Commit `c814fc7` (`docs: refresh handoff context`) recorded that documentation
-  and repository-metadata update in this handoff section. Both recent
-  documentation commits were pushed directly to `main` with explicit user
-  authorization; GitHub reported that the pull-request rule and six expected
-  status checks were bypassed. Preserve the normal pull-request workflow unless
-  a maintainer explicitly authorizes another direct push.
-- The 2026-09-12 v1 baseline is complete on an Intel i7-10510U with Go 1.26.2,
-  GOMAXPROCS 8, and the `powersave` governor. It includes ten microbenchmark
-  samples, five repetitions of each throughput/payload scenario, separate
-  10,000-sample latency runs, allocation deltas, and GNU `time -v` resource
-  evidence. The full report and notation legend are in `BENCHMARKS.md`.
-- MPSC results on this shared desktop host are strongly bimodal and include
-  scheduler-sensitive 50–100 ms latency stalls. Preserve every sample and do
-  not turn this local baseline into a release threshold. A controlled runner
-  and variance study remain necessary before enabling timing gates.
-- The baseline update and the later documentation refresh were validated with
-  `go test ./...`, `go test -race ./...`, `go vet ./...`, and `git diff --check`;
-  the refresh also ran `go run ./examples/basic`. Raw JSON, GNU time output,
-  and the temporary load-test binary were kept out of the repository.
 
 ## Performance work
 
