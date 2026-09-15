@@ -30,6 +30,7 @@ type EventTranslator[T any] func(T, int64) error
 //
 // A handler must not retain or mutate an event after it advances its consumer
 // sequence. Prefer a pointer type for T when callers need in-place translation.
+// A RingBuffer must not be copied after first use; pass it by pointer.
 type RingBuffer[T any] struct {
 	entries   []T
 	indexMask uint64

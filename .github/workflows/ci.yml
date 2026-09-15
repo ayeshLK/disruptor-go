@@ -51,6 +51,8 @@ jobs:
           git diff --exit-code -- go.mod go.sum
       - name: Verify standard-library-only module graph
         run: test "$(go list -m all | wc -l)" -eq 1
+      - name: Check exported API baseline
+        run: go run ./cmd/apicheck -check api_public.txt
       - name: Vet
         run: go vet ./...
       - name: Test

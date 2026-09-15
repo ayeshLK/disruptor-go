@@ -23,7 +23,9 @@ import (
 )
 
 // WaitStrategy controls how consumers wait for a sequence to become visible.
-// Implementations must be safe for concurrent use by multiple barriers.
+// Implementations must be safe for concurrent use by multiple barriers. The
+// interface is intentionally sealed; use one of the built-in constructors
+// rather than implementing a custom wait strategy.
 type WaitStrategy interface {
 	waitFor(context.Context, int64, sequenceReader, sequenceReader, waitState) (int64, error)
 	signalAll()
@@ -36,6 +38,7 @@ type waitState struct {
 }
 
 // BusySpinWaitStrategy continuously polls a dependency and consumes a CPU core.
+// A BusySpinWaitStrategy must not be copied after it is shared by barriers.
 type BusySpinWaitStrategy struct{}
 
 // BusySpinWait returns a strategy intended for consumers on dedicated cores.
@@ -57,6 +60,7 @@ func (BusySpinWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequen
 func (BusySpinWaitStrategy) signalAll() {}
 
 // YieldingWaitStrategy yields to the scheduler between publication checks.
+// A YieldingWaitStrategy must not be copied after it is shared by barriers.
 type YieldingWaitStrategy struct{}
 
 // YieldingWait returns a scheduler-yielding wait strategy.
@@ -77,6 +81,7 @@ func (YieldingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequen
 func (YieldingWaitStrategy) signalAll() {}
 
 // SleepingWaitStrategy spins, yields, and then sleeps while awaiting publication.
+// A SleepingWaitStrategy must not be copied after it is shared by barriers.
 type SleepingWaitStrategy struct {
 	// SpinTries is the number of polling iterations before yielding.
 	SpinTries int
@@ -130,7 +135,8 @@ func (s SleepingWaitStrategy) waitFor(ctx context.Context, desired int64, _ sequ
 func (SleepingWaitStrategy) signalAll() {}
 
 // BlockingWaitStrategy sleeps consumers until a producer publishes. After the
-// producer cursor passes the desired sequence, dependency waiting yields.
+// producer cursor passes the desired sequence, dependency waiting yields. A
+// BlockingWaitStrategy must not be copied after it is shared by barriers.
 type BlockingWaitStrategy struct {
 	mu sync.Mutex
 	ch chan struct{}

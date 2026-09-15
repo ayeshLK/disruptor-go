@@ -39,6 +39,9 @@ type discardSequencer interface {
 }
 
 // Sequencer coordinates producer claims, publication, capacity, and consumer gates.
+// It is an advanced API whose method set is part of the compatibility contract;
+// most applications should use RingBuffer instead of implementing or calling a
+// Sequencer directly.
 type Sequencer interface {
 	Next(context.Context, int64) (int64, error)
 	TryNext(int64) (int64, error)

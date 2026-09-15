@@ -48,7 +48,8 @@ const (
 
 // BatchProcessor waits on a barrier, handles all currently available published
 // events in order, skips discarded claims, then advances its consumer sequence
-// once per batch.
+// once per batch. A BatchProcessor must not be copied after first use; pass it
+// by pointer.
 type BatchProcessor[T any] struct {
 	ring         *RingBuffer[T]
 	barrier      *SequenceBarrier
