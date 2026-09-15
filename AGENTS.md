@@ -56,8 +56,9 @@ third-party dependencies unless a dependency is clearly justified and approved.
 - No P1 issues remain open. The remaining open P2 issues are #10 (pull-based
   event poller), #17 (v1 release validation), and #18 (release-readiness
   tracker).
-- Issue #10 is implemented on this branch at `3521cf6`; its poller API and
-  benchmark entry are not part of `main` until the PR is merged.
+- Issue #10 is implemented on this branch at `3521cf6`; PR #35 is open with
+  the poller API, benchmark entry, and synchronized handoff context. These
+  changes are not part of `main` until the PR is merged.
 - `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
   dated 2026-09-15. The poller entry is measured from `3521cf6`. A full
   canonical run exceeded the local ten-minute limit before completion and is
