@@ -200,7 +200,11 @@ func TestConcurrentMultiProducerDelivery(t *testing.T) {
 	const total = producers * perProducer
 	ring := newTestRing(t, 1024, MultiProducer, YieldingWait())
 	var handled atomic.Int64
-	processor, _ := NewBatchProcessor(ring, ring.NewBarrier(), func(_ *testEvent, _ int64, _ bool) error {
+	var invalid atomic.Int64
+	processor, _ := NewBatchProcessor(ring, ring.NewBarrier(), func(event *testEvent, sequence int64, _ bool) error {
+		if event.Check != sequence {
+			invalid.Add(1)
+		}
 		handled.Add(1)
 		return nil
 	})
@@ -233,6 +237,9 @@ func TestConcurrentMultiProducerDelivery(t *testing.T) {
 	}
 	if got := handled.Load(); got != total {
 		t.Fatalf("handled %d, want %d", got, total)
+	}
+	if got := invalid.Load(); got != 0 {
+		t.Fatalf("invalid event identities: %d", got)
 	}
 }
 
