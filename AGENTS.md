@@ -57,9 +57,10 @@ third-party dependencies unless a dependency is clearly justified and approved.
   validation) and #18 (release-readiness tracker); issue #10 was merged through
   PR #35 at `6910ef1`.
 - `BENCHMARKS.md` contains focused batch-publication and poller API refreshes
-  dated 2026-09-15. The post-merge poller entry is measured from `6910ef1`. A
-  full canonical run exceeded the local ten-minute limit before completion and
-  is intentionally not recorded.
+  plus a repository-wide grouped sweep dated 2026-09-15. The post-merge poller
+  and full sweep entries are measured from `6910ef1`; the full sweep covered all
+  19 top-level and 66 sub-benchmarks. The single combined command exceeded the
+  local ten-minute limit, so the complete results were collected sequentially.
 - Before starting new work, fetch `origin/main`; do not assume this branch or
   the local remote-tracking ref includes a newly merged PR.
 
